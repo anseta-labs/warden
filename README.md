@@ -28,7 +28,7 @@ const warden = new Warden();
 
 const chains = warden.getSupportedChains(); // e.g. [1, 560048]
 warden.getSupportedTransactionTypes(chains[0]); // e.g. ['DEPOSIT','EXIT']
-warden.isSupported(1, TransactionType.DEPOSIT); // true if registered
+warden.isSupported(chains[0], TransactionType.DEPOSIT); // true if registered
 
 // Unsigned EIP-1559 (or legacy) tx hex from your API — do not sign before validating
 const request: ValidationRequest = {
@@ -44,6 +44,7 @@ if (result.isValid) {
   // Safe to present to the wallet for signing
   console.log(result.detectedType); // same as request.transactionType when valid
 } else {
+  // Request validation failed, do not proceed with signing!
   console.error(result.reason, result.details);
 }
 ```
