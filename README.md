@@ -1,6 +1,6 @@
 # @bcwresearch/stakefi-warden
 
-TypeScript library for **StakeFi integrators**: validate **unsigned** transactions (e.g. EVM hex) **before** signing, using rules keyed by `chainId` and `TransactionType`.
+TypeScript library for **stakeFi integrators**: validate **unsigned** transactions (e.g. EVM hex) **before** signing, using rules keyed by `chainId` and `TransactionType`.
 
 ## Requirements
 
