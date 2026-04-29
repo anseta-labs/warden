@@ -7,7 +7,4 @@ export type {
 } from './types';
 export { TransactionType } from './types';
 export { BaseValidator } from './validators/base.validator';
-export {
-  ACTION_ID_ETH_DEPOSIT_MAINNET,
-  ACTION_ID_ETH_DEPOSIT_SEPOLIA,
-} from './validators/evm/eth2-deposit/constants';
+export { makeValidatorRegistryKey, validatorRegistry } from './validators';

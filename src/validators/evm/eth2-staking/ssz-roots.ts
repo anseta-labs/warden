@@ -36,7 +36,7 @@ const SigningData = new ContainerType(
 );
 
 /**
- * @see `compute_domain` in consensus-specs. Deposits use `genesis_validators_root = zero`.
+ * @see https://github.com/ethereum/consensus-specs/blob/b3e83f6691c61e5b35136000146015653b22ed38/specs/phase0/beacon-chain.md#compute_signing_root. Deposits use `genesis_validators_root = zero`.
  * First 4 bytes = domain type (e.g. DOMAIN_DEPOSIT); next 28 = fork data root[0:28].
  */
 export function computeDomain(
@@ -54,7 +54,7 @@ export function computeDomain(
 }
 
 /**
- * @see `compute_signing_root` in consensus-specs.
+ * @see https://github.com/ethereum/consensus-specs/blob/b3e83f6691c61e5b35136000146015653b22ed38/specs/phase0/beacon-chain.md#compute_signing_root
  */
 export function computeDepositSigningRoot(
   message: {

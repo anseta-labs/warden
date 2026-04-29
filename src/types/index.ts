@@ -2,16 +2,8 @@ export interface ValidationResult {
   isValid: boolean;
   reason?: string;
   details?: {
-    actionId?: string;
-    matchedTypes?: TransactionType[];
-    supportedTypes?: TransactionType[];
-    /** Eth2 deposit validation failed at this sub-stage, when present */
-    stage?: string; // todo: we dont care about stage, we just want to know if the transaction is valid or not, remove this
-    warning?: string;
-    attempts?: {
-      type?: TransactionType;
-      reason?: string;
-    }[];
+    chainId?: number;
+    transactionType?: TransactionType;
   };
   detectedType?: TransactionType;
 }
@@ -31,9 +23,14 @@ export interface ValidationContext {
 }
 
 export enum TransactionType {
+  // eth2 staking specific transaction types
   DEPOSIT = 'DEPOSIT',
   STAKE = 'STAKE',
+  WITHDRAW = 'WITHDRAW',
+  EXIT = 'EXIT',
+  FORCE_EXIT = 'FORCE_EXIT',
+
+  // other transaction types, for future use
   UNSTAKE = 'UNSTAKE',
   CLAIM_REWARDS = 'CLAIM_REWARDS',
-  WITHDRAW = 'WITHDRAW',
 }

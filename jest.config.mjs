@@ -2,6 +2,8 @@
 export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  /** List each test with ✓ / ✕ under its describe block */
+  verbose: true,
   roots: ['<rootDir>/src'],
   testMatch: ['**/?(*.)+(spec|test).ts'],
   /**
@@ -15,9 +17,12 @@ export default {
   /** Transform ESM deps under node_modules (e.g. @chainsafe/ssz) with babel-jest */
   transformIgnorePatterns: [],
   moduleNameMapper: {
-    /** pnpm: resolve ssz’s peer from project root in Jest */
+    /**
+     * pnpm + Jest: @chainsafe/ssz resolves persistent-merkle-tree from its package
+     * directory; map to the single hoisted copy (must match ssz’s expected API, 1.2.x).
+     */
     '^@chainsafe/persistent-merkle-tree$':
-      '<rootDir>/node_modules/@chainsafe/persistent-merkle-tree',
+      '<rootDir>/node_modules/@chainsafe/persistent-merkle-tree/lib/index.js',
   },
   collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts', '!src/index.ts'],
   coverageDirectory: './coverage',

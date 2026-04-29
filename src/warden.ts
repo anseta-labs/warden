@@ -4,27 +4,95 @@ import {
   ValidationContext,
   ValidationResult,
 } from './types';
-import { validatorRegistry } from './validators';
+import { makeValidatorRegistryKey, validatorRegistry } from './validators';
 import { isNonEmptyString, isNullOrUndefined } from './utils/validation';
 
+/**
+ * @param unsignedTransaction Unsigned EVM transaction (hex) from the dev API
+ * @param chainId L1 chain the user intends (must match the tx, e.g. 1, 560048)
+ * @param userAddress Address of the wallet that will sign
+ * @param transactionType Operation the user expects (must match a registered pair with `chainId`)
+ */
 export interface ValidationRequest {
-  /** StakeFi actionId = named-validator-node-id or validator-node address */
-  actionId: string;
   unsignedTransaction: string;
   userAddress: string;
-  /** EVM chain ID (e.g. 1 for Ethereum mainnet). Optional but recommended for EVM validators. */
-  chainId?: number;
+  chainId: number;
+  transactionType: TransactionType;
   args?: ActionArguments;
   context?: ValidationContext;
 }
 
+function isValidChainId(n: unknown): n is number {
+  return typeof n === 'number' && Number.isInteger(n) && n > 0;
+}
+
+function isValidTransactionType(t: unknown): t is TransactionType {
+  return (
+    typeof t === 'string' &&
+    (Object.values(TransactionType) as string[]).includes(t)
+  );
+}
+
+/** Parse `${chainId}:${TransactionType}` registry keys. */
+function parseValidatorRegistryKeys(): Array<{
+  chainId: number;
+  transactionType: TransactionType;
+}> {
+  return Array.from(validatorRegistry.keys()).map((key) => {
+    const sep = key.indexOf(':');
+    return {
+      chainId: Number(key.slice(0, sep)),
+      transactionType: key.slice(sep + 1) as TransactionType,
+    };
+  });
+}
+
 export class Warden {
-  getSupportedActionIds(): string[] {
-    return Array.from(validatorRegistry.keys());
+  /**
+   * Distinct L1 chain ids that have at least one registered validator, ascending.
+   */
+  getSupportedChains(): number[] {
+    const chainIds = new Set(
+      parseValidatorRegistryKeys().map((p) => p.chainId),
+    );
+    return Array.from(chainIds).sort((a, b) => a - b);
   }
 
-  isSupported(actionId: string): boolean {
-    return validatorRegistry.has(actionId);
+  /**
+   * Transaction types registered for `chainId`. Empty if the chain has no validators.
+   * Invalid `chainId` (non-positive or non-integer) yields `[]`.
+   */
+  getSupportedTransactionTypes(chainId: number): TransactionType[] {
+    if (!isValidChainId(chainId)) {
+      return [];
+    }
+    const types = parseValidatorRegistryKeys()
+      .filter((p) => p.chainId === chainId)
+      .map((p) => p.transactionType);
+    return Array.from(new Set(types)).sort((a, b) => a.localeCompare(b));
+  }
+
+  /**
+   * All `(chainId, transactionType)` pairs with a registered validator.
+   */
+  getSupportedChainTypePairs(): Array<{
+    chainId: number;
+    transactionType: TransactionType;
+  }> {
+    return parseValidatorRegistryKeys().sort((a, b) =>
+      a.chainId !== b.chainId
+        ? a.chainId - b.chainId
+        : a.transactionType.localeCompare(b.transactionType),
+    );
+  }
+
+  isSupported(chainId: number, transactionType: TransactionType): boolean {
+    if (!isValidChainId(chainId) || !isValidTransactionType(transactionType)) {
+      return false;
+    }
+    return validatorRegistry.has(
+      makeValidatorRegistryKey(chainId, transactionType),
+    );
   }
 
   validate(request: ValidationRequest): ValidationResult {
@@ -35,13 +103,34 @@ export class Warden {
       };
     }
 
-    const validator = validatorRegistry.get(request.actionId);
+    if (!isValidChainId(request.chainId)) {
+      return {
+        isValid: false,
+        reason: 'Invalid or missing chainId (positive integer required)',
+        details: { chainId: request.chainId },
+      };
+    }
+
+    if (!isValidTransactionType(request.transactionType)) {
+      return {
+        isValid: false,
+        reason: 'Invalid or missing transactionType',
+        details: { transactionType: request.transactionType },
+      };
+    }
+
+    const validator = validatorRegistry.get(
+      makeValidatorRegistryKey(request.chainId, request.transactionType),
+    );
 
     if (!validator) {
       return {
         isValid: false,
-        reason: 'Unknown action ID',
-        details: { actionId: request.actionId },
+        reason: 'No validator for this chain and transaction type',
+        details: {
+          chainId: request.chainId,
+          transactionType: request.transactionType,
+        },
       };
     }
 
@@ -51,82 +140,62 @@ export class Warden {
     ) {
       return {
         isValid: false,
-        reason: 'Invalid request parameters',
-      };
-    }
-
-    const supportedTypes = validator.getSupportedTransactionTypes();
-    const attempts: Array<{
-      type: TransactionType;
-      result: ValidationResult;
-    }> = [];
-    const matches: Array<{ type: TransactionType; result: ValidationResult }> =
-      [];
-
-    for (const transactionType of supportedTypes) {
-      try {
-        const result = validator.validate(
-          request.unsignedTransaction,
-          transactionType,
-          request.userAddress,
-          request.args,
-          {
-            ...(request.context ?? {}),
-            ...(request.chainId != null ? { chainId: request.chainId } : {}),
-          },
-        );
-
-        attempts.push({ type: transactionType, result });
-
-        if (result.isValid) {
-          matches.push({ type: transactionType, result });
-        }
-      } catch (error) {
-        attempts.push({
-          type: transactionType,
-          result: {
-            isValid: false,
-            reason: error instanceof Error ? error.message : String(error),
-          },
-        });
-      }
-    }
-
-    if (matches.length === 1) {
-      return {
-        ...matches[0].result,
-        detectedType: matches[0].type,
-      };
-    }
-
-    if (matches.length > 1) {
-      return {
-        isValid: false,
         reason:
-          'Transaction validation failed: Ambiguous transaction pattern detected. Transaction matches multiple operation types, which may indicate a security risk.',
+          'Invalid request parameters (unsigned transaction and user address are required)',
         details: {
-          actionId: request.actionId,
-          matchedTypes: matches.map((m) => m.type),
-          warning:
-            'A legitimate transaction must match exactly one pattern. Multiple matches indicate potential manipulation.',
+          chainId: request.chainId,
+          transactionType: request.transactionType,
         },
       };
     }
 
-    return {
-      isValid: false,
-      reason:
-        'Transaction validation failed: No matching operation pattern found. This transaction may be malicious or corrupted.',
-      details: {
-        actionId: request.actionId,
-        supportedTypes,
-        warning:
-          'A legitimate transaction should match exactly one supported pattern',
-        attempts: attempts.map((a) => ({
-          type: a.type,
-          reason: a.result.reason,
-        })),
-      },
-    };
+    const supported = validator.getSupportedTransactionTypes();
+    if (!supported.includes(request.transactionType)) {
+      return {
+        isValid: false,
+        reason: 'Validator does not implement this transaction type',
+        details: {
+          chainId: request.chainId,
+          transactionType: request.transactionType,
+        },
+      };
+    }
+
+    try {
+      const result = validator.validate(
+        request.unsignedTransaction,
+        request.transactionType,
+        request.userAddress,
+        request.args,
+        {
+          ...(request.context ?? {}),
+          chainId: request.chainId,
+        },
+      );
+
+      if (result.isValid) {
+        return {
+          ...result,
+          detectedType: request.transactionType,
+        };
+      }
+      return {
+        ...result,
+        details: {
+          ...result.details,
+          chainId: request.chainId,
+          transactionType: request.transactionType,
+        },
+      };
+    } catch (error) {
+      return {
+        isValid: false,
+        reason: error instanceof Error ? error.message : String(error),
+        details: {
+          chainId: request.chainId,
+          transactionType: request.transactionType,
+        },
+      };
+    }
   }
 }

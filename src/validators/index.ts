@@ -1,41 +1,30 @@
 import { BaseValidator } from './base.validator';
-import {
-  ACTION_ID_ETH_DEPOSIT_HOODI,
-  ACTION_ID_ETH_DEPOSIT_MAINNET,
-  ACTION_ID_ETH_DEPOSIT_SEPOLIA,
-} from './evm/eth2-deposit/constants';
-import {
-  ETH_DEPOSIT_HOODI,
-  ETH_DEPOSIT_MAINNET,
-  ETH_DEPOSIT_SEPOLIA,
-} from './evm/eth2-deposit/networks';
-import { EthereumBeaconDepositValidator } from './evm/ethereum-beacon-deposit.validator';
+import { TransactionType } from '../types';
+import { ETH_HOODI, ETH_MAINNET } from './evm/eth2-staking/networks';
+import { EthereumBeaconValidator } from './evm/ethereum-beacon.validator';
 
 /**
- * Maps stakeFi action IDs to transaction validators.
- * Add more transaction validators here as they are added to the project
- * actionId could be the named-validator-node-id or the validator-node address
+ * Map key: `${chainId}:${TransactionType}` (see {@link makeValidatorRegistryKey}).
+ * Register a validator for each (chain, operation) pair the library supports.
  */
-export const validatorRegistry = new Map<string, BaseValidator>([
-  [
-    ACTION_ID_ETH_DEPOSIT_MAINNET,
-    new EthereumBeaconDepositValidator(ETH_DEPOSIT_MAINNET),
-  ],
-  [
-    ACTION_ID_ETH_DEPOSIT_SEPOLIA,
-    new EthereumBeaconDepositValidator(ETH_DEPOSIT_SEPOLIA),
-  ],
-  [
-    ACTION_ID_ETH_DEPOSIT_HOODI,
-    new EthereumBeaconDepositValidator(ETH_DEPOSIT_HOODI),
-  ],
-  // for example:
-  //   [
-  //     "some-named-validator-here",
-  //     new CosmosValidator(someParamsHere),
-  //   ],
-  //   [
-  //     "0xvalidator-node-address-here",
-  //     new SomeNetworkValidator(someParamsHere),
-  //   ],
-]);
+export const validatorRegistry = new Map<string, BaseValidator>();
+
+/**
+ * Build the registry key used for {@link validatorRegistry} and {@link Warden}.
+ */
+export function makeValidatorRegistryKey(
+  chainId: number,
+  transactionType: TransactionType,
+): string {
+  return `${chainId}:${transactionType}`;
+}
+
+validatorRegistry.set(
+  makeValidatorRegistryKey(ETH_MAINNET.chainId, TransactionType.DEPOSIT),
+  new EthereumBeaconValidator(ETH_MAINNET),
+);
+
+validatorRegistry.set(
+  makeValidatorRegistryKey(ETH_HOODI.chainId, TransactionType.DEPOSIT),
+  new EthereumBeaconValidator(ETH_HOODI),
+);

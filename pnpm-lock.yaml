@@ -12,8 +12,8 @@ importers:
         specifier: ^2.2.0
         version: 2.2.0
       '@chainsafe/persistent-merkle-tree':
-        specifier: ^0.6.1
-        version: 0.6.1
+        specifier: 1.2.5
+        version: 1.2.5
       '@chainsafe/ssz':
         specifier: ^1.4.0
         version: 1.4.0
@@ -651,9 +651,6 @@ packages:
   '@bcoe/v8-coverage@0.2.3':
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
 
-  '@chainsafe/as-sha256@0.4.2':
-    resolution: {integrity: sha512-HJ8GZBRjLeWtRsAXf3EbNsNzmTGpzTFjfpSf4yHkLYC+E52DhT6hwz+7qpj6I/EmFzSUm5tYYvT9K8GZokLQCQ==}
-
   '@chainsafe/as-sha256@1.2.4':
     resolution: {integrity: sha512-3GXDysZOKD6cTYbm48lEdXdUbS7cafjXQZfgHOspTByhoGR/JM3KBXyF3vE6bf63ImjNPyoEZwnQcpYPQ6k3bQ==}
 
@@ -742,9 +739,6 @@ packages:
   '@chainsafe/hashtree@1.0.2':
     resolution: {integrity: sha512-OaWjsZ6S/GaT2RvaqdpsF5Mux8qQOE2KbitX2yHmQJZNUZkdh7C3N4PA5LsvewqX+z8Nkv8mr1uSe0LSrHGiQw==}
     engines: {node: '>= 18'}
-
-  '@chainsafe/persistent-merkle-tree@0.6.1':
-    resolution: {integrity: sha512-gcENLemRR13+1MED2NeZBMA7FRS0xQPM7L2vhMqvKkjqtFT4YfjSVADq5U0iLuQLhFUJEMVuA8fbv5v+TN6O9A==}
 
   '@chainsafe/persistent-merkle-tree@1.2.5':
     resolution: {integrity: sha512-uyv3/nHkD8vNXjdez6q89rhXwGDUp3YX2mBbOwB7/xelgZ9E7hc3HQgOuq1EdfM9Vyh09jiwimXF/hskmymOfQ==}
@@ -3021,8 +3015,6 @@ snapshots:
 
   '@bcoe/v8-coverage@0.2.3': {}
 
-  '@chainsafe/as-sha256@0.4.2': {}
-
   '@chainsafe/as-sha256@1.2.4': {}
 
   '@chainsafe/blst-darwin-arm64@2.2.0':
@@ -3082,11 +3074,6 @@ snapshots:
       '@chainsafe/hashtree-linux-x64-gnu': 1.0.2
       '@chainsafe/hashtree-linux-x64-musl': 1.0.2
       '@chainsafe/hashtree-win32-x64-msvc': 1.0.2
-
-  '@chainsafe/persistent-merkle-tree@0.6.1':
-    dependencies:
-      '@chainsafe/as-sha256': 0.4.2
-      '@noble/hashes': 1.8.0
 
   '@chainsafe/persistent-merkle-tree@1.2.5':
     dependencies:
