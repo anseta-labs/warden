@@ -6,6 +6,18 @@ import { EthereumBeaconValidator } from './evm/ethereum-beacon.validator';
 /**
  * Map key: `${chainId}:${TransactionType}` (see {@link makeValidatorRegistryKey}).
  * Register a validator for each (chain, operation) pair the library supports.
+
+ *
+ * for example:
+ *    [
+ *      "some-named-validator-here",
+ *      new CosmosValidator(someParamsHere),
+ *    ],
+ *    [
+ *      "0xvalidator-node-address-here",
+ *      new SomeNetworkValidator(someParamsHere),
+ *    ],
+ *
  */
 export const validatorRegistry = new Map<string, BaseValidator>();
 

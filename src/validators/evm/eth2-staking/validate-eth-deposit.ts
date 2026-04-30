@@ -1,6 +1,12 @@
 import { PublicKey, Signature, verify } from '@chainsafe/blst';
 import { byteArrayEquals } from '@chainsafe/ssz';
-import { getAddress, getBytes, Interface, Transaction } from 'ethers';
+import {
+  getAddress,
+  getBytes,
+  Interface,
+  isAddress,
+  Transaction,
+} from 'ethers';
 import {
   BLS_WITHDRAWAL_PREFIX,
   DOMAIN_DEPOSIT_TYPE,
@@ -9,7 +15,8 @@ import {
   MIN_DEPOSIT_GWEI_COUNT,
   ONE_ETH_WEI,
   PECTRA_COMPOUNDING_WITHDRAWAL_PREFIX,
-  DEPOSIT_FUNC,
+  DEPOSIT_FUNC_SIGNATURE,
+  DEPOSIT_FUNC_NAME,
 } from './constants';
 import type { EthNetwork } from './networks';
 import {
@@ -21,10 +28,11 @@ import {
   computeDomain,
   hashDepositDataTreeRoot,
 } from './ssz-roots';
+import { ERRORS } from '../../../constants/messages/errors';
 
-const depositInterface = new Interface([DEPOSIT_FUNC]);
+const depositInterface = new Interface([DEPOSIT_FUNC_SIGNATURE]);
 const depositSelector = getBytes(
-  depositInterface.getFunction('deposit')!.selector,
+  depositInterface.getFunction(DEPOSIT_FUNC_NAME)!.selector,
 );
 
 export type EthDepositValidationResult = { ok: boolean; reason?: string };
@@ -47,8 +55,13 @@ export function validateEthBeaconDeposit(
   network: EthNetwork,
 ): EthDepositValidationResult {
   if (!userAddress) {
-    return { ok: false, reason: 'Missing user address' };
+    return { ok: false, reason: ERRORS.INVALID_USER_ADDR };
   }
+
+  if (!isAddress(userAddress)) {
+    return { ok: false, reason: ERRORS.ETH.INVALID_ETH_USER_ADDR };
+  }
+
   const userAddr = getAddress(userAddress);
   // --- 1) Transaction shape
   let tx: Transaction;
@@ -57,44 +70,43 @@ export function validateEthBeaconDeposit(
   } catch {
     return {
       ok: false,
-      reason: 'Invalid unsigned EVM transaction bytes',
+      reason: ERRORS.INVALID_UNSIGNED_TX,
     };
   }
   if (tx.to == null) {
     return {
       ok: false,
-      reason: 'Transaction has no "to" (contract) address',
+      reason: ERRORS.INVALID_TX_TO_ADDR,
     };
   }
   if (!isDepositContract(tx.to, network)) {
     return {
       ok: false,
-      reason:
-        'Transaction "to" is not the official beacon deposit contract for this network',
+      reason: ERRORS.ETH.INVALID_TX_TO_ADDR_NOT_DEPOSIT_CONTRACT,
     };
   }
   if (tx.chainId == null) {
     return {
       ok: false,
-      reason: 'Transaction must include chainId (EIP-155)',
+      reason: ERRORS.INVALID_CHAIN_ID,
     };
   }
   if (tx.chainId !== BigInt(network.chainId)) {
     return {
       ok: false,
-      reason: 'Transaction chainId does not match network configuration',
+      reason: ERRORS.INVALID_CHAIN_ID_NOT_MATCH_NETWORK,
     };
   }
   if (requestChainId != null && requestChainId !== network.chainId) {
     return {
       ok: false,
-      reason: 'Request chainId does not match this validator network',
+      reason: ERRORS.INVALID_CHAIN_ID_NOT_MATCH_REQUEST,
     };
   }
   if (requestChainId != null && requestChainId !== Number(tx.chainId)) {
     return {
       ok: false,
-      reason: 'Request chainId does not match transaction chainId',
+      reason: ERRORS.INVALID_CHAIN_ID_NOT_MATCH_TRANSACTION,
     };
   }
   const { value } = tx;
@@ -102,39 +114,38 @@ export function validateEthBeaconDeposit(
   if (value === 0n) {
     return {
       ok: false,
-      reason: 'Deposit must send a non-zero ETH value',
+      reason: ERRORS.ETH.INVALID_DEPOSIT_VALUE_ZERO,
     };
   }
   if (value % GWEI !== 0n) {
     return {
       ok: false,
-      reason:
-        'Deposit value must be a multiple of 1 gwei (as required on-chain)',
+      reason: ERRORS.ETH.INVALID_DEPOSIT_VALUE_MULTIPLE_OF_GWEI,
     };
   }
   const gwei = value / GWEI;
   if (gwei < MIN_DEPOSIT_GWEI_COUNT) {
     return {
       ok: false,
-      reason: 'Deposit below minimum (1 ETH on the deposit contract)',
+      reason: ERRORS.ETH.INVALID_DEPOSIT_VALUE_BELOW_MINIMUM,
     };
   }
   if (gwei > 0xffffffffffffffffn) {
     return {
       ok: false,
-      reason: 'Deposit amount in gwei exceeds uint64',
+      reason: ERRORS.ETH.INVALID_DEPOSIT_VALUE_EXCEEDS_UINT64,
     };
   }
   if (dataBytes.length < 4) {
     return {
       ok: false,
-      reason: 'Calldata too short for a function call',
+      reason: ERRORS.ETH.INVALID_CALLDATA_TOO_SHORT,
     };
   }
   if (!byteArrayEquals(dataBytes.subarray(0, 4), depositSelector)) {
     return {
       ok: false,
-      reason: 'Calldata is not a call to deposit(bytes,bytes,bytes,bytes32)',
+      reason: ERRORS.ETH.INVALID_CALLDATA_NOT_CALL_TO_DEPOSIT,
     };
   }
 
@@ -145,7 +156,7 @@ export function validateEthBeaconDeposit(
   let depositDataRoot: Uint8Array;
   try {
     const decoded = depositInterface.decodeFunctionData(
-      'deposit',
+      DEPOSIT_FUNC_NAME,
       tx.data,
     ) as unknown as [
       string | Uint8Array,
@@ -160,15 +171,14 @@ export function validateEthBeaconDeposit(
   } catch {
     return {
       ok: false,
-      reason: 'Calldata is not a valid deposit(bytes,bytes,bytes,bytes32) call',
+      reason: ERRORS.ETH.INVALID_CALLDATA_NOT_VALID_DEPOSIT_CALL,
     };
   }
 
   if (gwei > BigInt(Number.MAX_SAFE_INTEGER)) {
     return {
       ok: false,
-      reason:
-        'Deposit gwei is too large for this validator (Number-safe range)',
+      reason: ERRORS.ETH.INVALID_DEPOSIT_VALUE_TOO_LARGE,
     };
   }
   const amountGwei = Number(gwei);
@@ -177,16 +187,16 @@ export function validateEthBeaconDeposit(
   if (pubKey.length !== 48) {
     return {
       ok: false,
-      reason: 'BLS pubkey must be 48 bytes',
+      reason: ERRORS.ETH.INVALID_BLS_PUBKEY_LENGTH,
     };
   }
   if (isAllZero(pubKey)) {
-    return { ok: false, reason: 'BLS pubkey is all zero' };
+    return { ok: false, reason: ERRORS.ETH.INVALID_BLS_PUBKEY_ALL_ZERO };
   }
   if (withdrawalCredentials.length !== 32) {
     return {
       ok: false,
-      reason: 'Withdrawal credentials must be 32 bytes',
+      reason: ERRORS.ETH.INVALID_WITHDRAWAL_CREDENTIALS_LENGTH,
     };
   }
   const prefix = withdrawalCredentials[0];
@@ -200,15 +210,14 @@ export function validateEthBeaconDeposit(
         ok: false,
         reason:
           prefix === PECTRA_COMPOUNDING_WITHDRAWAL_PREFIX
-            ? 'Invalid 0x02 withdrawal credentials layout'
-            : 'Invalid 0x01 withdrawal credentials layout',
+            ? ERRORS.ETH.INVALID_0x02_WITHDRAWAL_CREDENTIALS_LAYOUT
+            : ERRORS.ETH.INVALID_0x01_WITHDRAWAL_CREDENTIALS_LAYOUT,
       };
     }
     if (addr !== userAddr) {
       return {
         ok: false,
-        reason:
-          'Withdrawal credentials do not target the staker (user) address',
+        reason: ERRORS.ETH.INVALID_WITHDRAWAL_CREDENTIALS_NOT_TARGET_STAKER,
       };
     }
     if (prefix === PECTRA_COMPOUNDING_WITHDRAWAL_PREFIX) {
@@ -221,26 +230,25 @@ export function validateEthBeaconDeposit(
     if (isAllZero(withdrawalCredentials)) {
       return {
         ok: false,
-        reason: 'BLS withdrawal credentials (0x00) are all zero',
+        reason: ERRORS.ETH.INVALID_BLS_WITHDRAWAL_CREDENTIALS_ALL_ZERO,
       };
     }
   } else {
     return {
       ok: false,
-      reason:
-        'Unsupported withdrawal credentials prefix (expected 0x00, 0x01, or 0x02)',
+      reason: ERRORS.ETH.INVALID_UNSUPPORTED_WITHDRAWAL_CREDENTIALS_PREFIX,
     };
   }
   if (signature.length !== 96) {
     return {
       ok: false,
-      reason: 'BLS signature must be 96 bytes',
+      reason: ERRORS.ETH.INVALID_BLS_SIGNATURE_LENGTH,
     };
   }
   if (depositDataRoot.length !== 32) {
     return {
       ok: false,
-      reason: 'deposit_data_root must be 32 bytes',
+      reason: ERRORS.ETH.INVALID_DEPOSIT_DATA_ROOT_LENGTH,
     };
   }
 
@@ -262,8 +270,7 @@ export function validateEthBeaconDeposit(
   if (!byteArrayEquals(expectedRoot, depositDataRoot)) {
     return {
       ok: false,
-      reason:
-        'deposit_data_root does not match SSZ root of (pubkey, withdrawal credentials, amount, signature)',
+      reason: ERRORS.ETH.INVALID_DEPOSIT_DATA_ROOT_NOT_MATCH_SSZ_ROOT,
     };
   }
 
@@ -278,7 +285,7 @@ export function validateEthBeaconDeposit(
   } catch (e) {
     return {
       ok: false,
-      reason: `Signing root failed: ${e instanceof Error ? e.message : String(e)}`,
+      reason: `${ERRORS.ETH.SIGNING_ROOT_FAILED}: ${e instanceof Error ? e.message : String(e)}`,
     };
   }
   try {
@@ -287,14 +294,13 @@ export function validateEthBeaconDeposit(
     if (!verify(signingRoot, pk, sig, true, true)) {
       return {
         ok: false,
-        reason:
-          'BLS signature did not verify (deposit message proof of possession)',
+        reason: ERRORS.ETH.BLS_SIGNATURE_DID_NOT_VERIFY,
       };
     }
   } catch (e) {
     return {
       ok: false,
-      reason: `BLS verification error: ${e instanceof Error ? e.message : String(e)}`,
+      reason: `${ERRORS.ETH.BLS_VERIFICATION_ERROR}: ${e instanceof Error ? e.message : String(e)}`,
     };
   }
 
@@ -307,15 +313,15 @@ export function validateEthBeaconDeposit(
  */
 function validatePectra0x02ValueWei(valueWei: bigint): string | null {
   if (valueWei % ONE_ETH_WEI !== 0n) {
-    return '0x02 deposits must send a whole number of ETH';
+    return ERRORS.ETH.INVALID_0x02_DEPOSIT_VALUE_NOT_WHOLE_NUMBER_OF_ETH;
   }
   const eth = valueWei / ONE_ETH_WEI;
   if (eth === 0n) {
-    return 'Deposit below minimum (1 ETH on the deposit contract)';
+    return ERRORS.ETH.INVALID_DEPOSIT_VALUE_BELOW_MINIMUM;
   }
   if (eth < 32n) {
     if (eth < 1n) {
-      return '0x02 top-up must be at least 1 ETH';
+      return ERRORS.ETH.INVALID_0x02_TOP_UP_VALUE_BELOW_MINIMUM;
     }
     return null;
   }

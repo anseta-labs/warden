@@ -1,9 +1,9 @@
 export { Warden } from './warden';
-export type { ValidationRequest } from './warden';
 export type {
   ValidationResult,
   ActionArguments,
   ValidationContext,
+  ValidationRequest,
 } from './types';
 export { TransactionType } from './types';
 export { BaseValidator } from './validators/base.validator';

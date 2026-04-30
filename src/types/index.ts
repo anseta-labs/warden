@@ -8,6 +8,15 @@ export interface ValidationResult {
   detectedType?: TransactionType;
 }
 
+export interface ValidationRequest {
+  unsignedTransaction: string;
+  userAddress: string;
+  chainId: number;
+  transactionType: TransactionType;
+  args?: ActionArguments;
+  context?: ValidationContext;
+}
+
 export type ActionArguments = {
   amount?: string;
   validatorAddress?: string;

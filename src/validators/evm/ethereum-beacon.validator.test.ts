@@ -5,13 +5,17 @@
  */
 import { getBytes, hexlify, Interface, Transaction } from 'ethers';
 import { TransactionType } from '../../types';
-import { DEPOSIT_FUNC, GWEI } from './eth2-staking/constants';
+import {
+  DEPOSIT_FUNC_NAME,
+  DEPOSIT_FUNC_SIGNATURE,
+  GWEI,
+} from './eth2-staking/constants';
 import { ETH_MAINNET } from './eth2-staking/networks';
 import { hashDepositDataTreeRoot } from './eth2-staking/ssz-roots';
 import depositFixtures from './__fixtures__/eth2-deposit-unsigned-hex.json';
 import { EthereumBeaconValidator } from './ethereum-beacon.validator';
 
-const depositIf = new Interface([DEPOSIT_FUNC]);
+const depositIf = new Interface([DEPOSIT_FUNC_SIGNATURE]);
 const staker = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045';
 const attacker = '0x0000000000000000000000000000000000000001';
 
@@ -35,12 +39,10 @@ function cloneTx(unsignedHex: string, patch: Partial<Transaction>): string {
 }
 
 function decodeDepositCalldata(data: string) {
-  const d = depositIf.decodeFunctionData('deposit', data) as unknown as [
-    string,
-    string,
-    string,
-    string,
-  ];
+  const d = depositIf.decodeFunctionData(
+    DEPOSIT_FUNC_NAME,
+    data,
+  ) as unknown as [string, string, string, string];
   return {
     pubkey: new Uint8Array(getBytes(d[0])),
     withdrawalCredentials: new Uint8Array(getBytes(d[1])),
@@ -55,7 +57,7 @@ function encodeDepositCalldata(parts: {
   signature: Uint8Array;
   depositDataRoot: Uint8Array;
 }): string {
-  return depositIf.encodeFunctionData('deposit', [
+  return depositIf.encodeFunctionData(DEPOSIT_FUNC_NAME, [
     hexlify(parts.pubkey),
     hexlify(parts.withdrawalCredentials),
     hexlify(parts.signature),

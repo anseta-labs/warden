@@ -1,3 +1,4 @@
+import { ERRORS } from '../../constants/messages/errors';
 import {
   ActionArguments,
   TransactionType,
@@ -50,7 +51,7 @@ export class EthereumBeaconValidator extends BaseValidator {
     if (!valResult.ok) {
       return {
         isValid: false,
-        reason: valResult.reason ?? 'Unknown error',
+        reason: valResult.reason ?? ERRORS.TRANSACTION_VALIDATION_FAILED,
       };
     }
     return this.safe();

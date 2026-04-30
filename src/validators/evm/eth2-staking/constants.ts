@@ -1,6 +1,7 @@
 // deposit function signature
-export const DEPOSIT_FUNC =
+export const DEPOSIT_FUNC_SIGNATURE =
   'function deposit(bytes,bytes,bytes,bytes32) payable';
+export const DEPOSIT_FUNC_NAME = 'deposit';
 
 // 1 ETH worth of gwei
 export const MIN_DEPOSIT_GWEI_COUNT = 1_000_000_000n;

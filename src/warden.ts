@@ -1,26 +1,7 @@
-import {
-  ActionArguments,
-  TransactionType,
-  ValidationContext,
-  ValidationResult,
-} from './types';
+import { TransactionType, ValidationRequest, ValidationResult } from './types';
 import { makeValidatorRegistryKey, validatorRegistry } from './validators';
 import { isNonEmptyString, isNullOrUndefined } from './utils/validation';
-
-/**
- * @param unsignedTransaction Unsigned EVM transaction (hex) from the dev API
- * @param chainId L1 chain the user intends (must match the tx, e.g. 1, 560048)
- * @param userAddress Address of the wallet that will sign
- * @param transactionType Operation the user expects (must match a registered pair with `chainId`)
- */
-export interface ValidationRequest {
-  unsignedTransaction: string;
-  userAddress: string;
-  chainId: number;
-  transactionType: TransactionType;
-  args?: ActionArguments;
-  context?: ValidationContext;
-}
+import { ERRORS } from './constants/messages/errors';
 
 function isValidChainId(n: unknown): n is number {
   return typeof n === 'number' && Number.isInteger(n) && n > 0;
@@ -95,18 +76,24 @@ export class Warden {
     );
   }
 
+  /**
+   * @param unsignedTransaction Unsigned EVM transaction (hex) from the dev API
+   * @param chainId L1 chain the user intends (must match the tx, e.g. 1, 560048)
+   * @param userAddress Address of the wallet that will sign
+   * @param transactionType Operation the user expects (must match a registered pair with `chainId`)
+   */
   validate(request: ValidationRequest): ValidationResult {
     if (isNullOrUndefined(request)) {
       return {
         isValid: false,
-        reason: 'Missing validation request',
+        reason: ERRORS.MISSING_VALIDATION_REQUEST,
       };
     }
 
     if (!isValidChainId(request.chainId)) {
       return {
         isValid: false,
-        reason: 'Invalid or missing chainId (positive integer required)',
+        reason: ERRORS.INVALID_CHAIN_ID,
         details: { chainId: request.chainId },
       };
     }
@@ -114,7 +101,7 @@ export class Warden {
     if (!isValidTransactionType(request.transactionType)) {
       return {
         isValid: false,
-        reason: 'Invalid or missing transactionType',
+        reason: ERRORS.INVALID_TX_TYPE,
         details: { transactionType: request.transactionType },
       };
     }
@@ -126,7 +113,7 @@ export class Warden {
     if (!validator) {
       return {
         isValid: false,
-        reason: 'No validator for this chain and transaction type',
+        reason: ERRORS.NO_VALIDATOR_CHAIN_ID_TX_TYPE,
         details: {
           chainId: request.chainId,
           transactionType: request.transactionType,
@@ -134,14 +121,21 @@ export class Warden {
       };
     }
 
-    if (
-      !isNonEmptyString(request.unsignedTransaction) ||
-      !isNonEmptyString(request.userAddress)
-    ) {
+    if (!isNonEmptyString(request.unsignedTransaction)) {
       return {
         isValid: false,
-        reason:
-          'Invalid request parameters (unsigned transaction and user address are required)',
+        reason: ERRORS.INVALID_UNSIGNED_TX,
+        details: {
+          chainId: request.chainId,
+          transactionType: request.transactionType,
+        },
+      };
+    }
+
+    if (!isNonEmptyString(request.userAddress)) {
+      return {
+        isValid: false,
+        reason: ERRORS.INVALID_USER_ADDR,
         details: {
           chainId: request.chainId,
           transactionType: request.transactionType,
@@ -153,7 +147,7 @@ export class Warden {
     if (!supported.includes(request.transactionType)) {
       return {
         isValid: false,
-        reason: 'Validator does not implement this transaction type',
+        reason: ERRORS.UNSUPPORTED_TX_TYPE,
         details: {
           chainId: request.chainId,
           transactionType: request.transactionType,
