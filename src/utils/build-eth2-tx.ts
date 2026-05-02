@@ -19,11 +19,13 @@
  *
  */
 
-import { AbiCoder, Transaction } from 'ethers';
+import { AbiCoder, hexlify, Transaction } from 'ethers';
 import { bls12_381 as bls } from '@noble/curves/bls12-381.js';
 import { ContainerType, ByteVectorType, UintNumberType } from '@chainsafe/ssz';
 
 import {
+  EIP7002_MIN_WITHDRAWAL_REQUEST_FEE_WEI,
+  EIP7002_WITHDRAWAL_REQUEST_PREDEPLOY,
   GENESIS_FORK_VERSION_MAINNET,
   GENESIS_FORK_VERSION_HOODI,
 } from '../validators/evm/eth2-staking/constants';
@@ -86,6 +88,11 @@ const GWEI = 1_000_000_000n;
 const DEPOSIT_TX_GAS_LIMIT = 200_000n;
 const DEPOSIT_TX_MAX_FEE_PER_GAS = 50n * 10n ** 9n;
 const DEPOSIT_TX_MAX_PRIORITY_FEE_PER_GAS = 1n * 10n ** 9n;
+
+/** EIP-1559 envelope for EIP-7002 withdrawal-request txs (matches validator tests). */
+const EIP7002_TX_GAS_LIMIT = 150_000n;
+const EIP7002_TX_MAX_FEE_PER_GAS = 50n * 10n ** 9n;
+const EIP7002_TX_MAX_PRIORITY_FEE_PER_GAS = 1n * 10n ** 9n;
 
 const blsEth = bls.longSignatures;
 const ETH_BLS_DST = Buffer.from('BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_');
@@ -309,4 +316,72 @@ export async function buildEth2DepositApiResponse(
   };
 
   return response;
+}
+
+// --- EIP-7002 execution-layer withdrawal requests (partial + full-exit sentinel)
+
+export interface BuildEip7002WithdrawalParams {
+  network: Network;
+  /** 48-byte compressed BLS12-381 G1 pubkey (validator withdrawal credentials use this key). */
+  validatorPubkey: Uint8Array;
+  /**
+   * Gwei amount for a partial withdrawal. Use `0n` for a full-exit request
+   * (validate with `TransactionType.FORCE_EXIT`).
+   */
+  amountGwei: bigint;
+  /** EL fee (wei); must be at least {@link EIP7002_MIN_WITHDRAWAL_REQUEST_FEE_WEI}. */
+  requestFeeWei: bigint;
+}
+
+/**
+ * Build an unsigned EIP-1559 transaction calling the EIP-7002 withdrawal-request predeploy
+ * with 56-byte calldata: pubkey + big-endian uint64 `amountGwei`.
+ */
+export function buildEip7002WithdrawalUnsignedSerialized(
+  params: BuildEip7002WithdrawalParams,
+): string {
+  const cfg = NETWORKS[params.network];
+  if (params.validatorPubkey.length !== 48) {
+    throw new Error('validatorPubkey must be 48 bytes (compressed BLS G1)');
+  }
+  if (params.requestFeeWei < EIP7002_MIN_WITHDRAWAL_REQUEST_FEE_WEI) {
+    throw new Error(
+      `requestFeeWei must be >= ${EIP7002_MIN_WITHDRAWAL_REQUEST_FEE_WEI} wei`,
+    );
+  }
+
+  const amountBe = new Uint8Array(8);
+  let v = params.amountGwei;
+  for (let i = 7; i >= 0; i--) {
+    amountBe[i] = Number(v & 0xffn);
+    v >>= 8n;
+  }
+
+  const calldataBytes = new Uint8Array(56);
+  calldataBytes.set(params.validatorPubkey, 0);
+  calldataBytes.set(amountBe, 48);
+
+  const chainIdNum = Number(cfg.chainId);
+  const data = hexlify(calldataBytes);
+
+  return Transaction.from({
+    type: 2,
+    to: EIP7002_WITHDRAWAL_REQUEST_PREDEPLOY,
+    value: params.requestFeeWei,
+    data,
+    chainId: chainIdNum,
+    nonce: 0,
+    gasLimit: EIP7002_TX_GAS_LIMIT,
+    maxFeePerGas: EIP7002_TX_MAX_FEE_PER_GAS,
+    maxPriorityFeePerGas: EIP7002_TX_MAX_PRIORITY_FEE_PER_GAS,
+  }).unsignedSerialized;
+}
+
+/**
+ * Random demo validator pubkey (48 bytes) for examples/tests. Not a mainnet validator.
+ */
+export function createDemoEip7002ValidatorPubkey(): Uint8Array {
+  const privKey = bls.utils.randomSecretKey();
+  const pubkeyPt = blsEth.getPublicKey(privKey);
+  return new Uint8Array(pubkeyPt.toBytes(true));
 }

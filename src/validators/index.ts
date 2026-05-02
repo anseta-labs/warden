@@ -31,12 +31,31 @@ export function makeValidatorRegistryKey(
   return `${chainId}:${transactionType}`;
 }
 
+const ethereumMainnetValidator = new EthereumBeaconValidator(ETH_MAINNET);
+const ethereumHoodiValidator = new EthereumBeaconValidator(ETH_HOODI);
+
 validatorRegistry.set(
   makeValidatorRegistryKey(ETH_MAINNET.chainId, TransactionType.DEPOSIT),
-  new EthereumBeaconValidator(ETH_MAINNET),
+  ethereumMainnetValidator,
+);
+validatorRegistry.set(
+  makeValidatorRegistryKey(ETH_MAINNET.chainId, TransactionType.WITHDRAW),
+  ethereumMainnetValidator,
+);
+validatorRegistry.set(
+  makeValidatorRegistryKey(ETH_MAINNET.chainId, TransactionType.FORCE_EXIT),
+  ethereumMainnetValidator,
 );
 
 validatorRegistry.set(
   makeValidatorRegistryKey(ETH_HOODI.chainId, TransactionType.DEPOSIT),
-  new EthereumBeaconValidator(ETH_HOODI),
+  ethereumHoodiValidator,
+);
+validatorRegistry.set(
+  makeValidatorRegistryKey(ETH_HOODI.chainId, TransactionType.WITHDRAW),
+  ethereumHoodiValidator,
+);
+validatorRegistry.set(
+  makeValidatorRegistryKey(ETH_HOODI.chainId, TransactionType.FORCE_EXIT),
+  ethereumHoodiValidator,
 );

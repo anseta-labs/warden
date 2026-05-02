@@ -34,12 +34,12 @@ export interface ValidationContext {
 export enum TransactionType {
   // eth2 staking specific transaction types
   DEPOSIT = 'DEPOSIT',
-  STAKE = 'STAKE',
   WITHDRAW = 'WITHDRAW',
-  EXIT = 'EXIT',
   FORCE_EXIT = 'FORCE_EXIT',
 
   // other transaction types, for future use
+  EXIT = 'EXIT',
+  STAKE = 'STAKE',
   UNSTAKE = 'UNSTAKE',
   CLAIM_REWARDS = 'CLAIM_REWARDS',
 }

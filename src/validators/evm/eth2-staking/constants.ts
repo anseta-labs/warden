@@ -18,3 +18,12 @@ export const GENESIS_FORK_VERSION_MAINNET = new Uint8Array([0, 0, 0, 0]);
 export const GENESIS_FORK_VERSION_HOODI = new Uint8Array([0x90, 0, 0, 0x69]);
 
 export const ZERO_HASH = new Uint8Array(32);
+
+export const EIP7002_WITHDRAWAL_REQUEST_PREDEPLOY =
+  '0x00000961Ef480Eb55e80D19ad83579A64c007002';
+
+// User call: exactly 48-byte BLS pubkey + big-endian uint64 amount (gwei on consensus layer)
+export const EIP7002_WITHDRAWAL_REQUEST_CALLDATA_BYTES = 56;
+
+// Minimum fee (wei) for a withdrawal request per EIP-7002; actual fee is often higher
+export const EIP7002_MIN_WITHDRAWAL_REQUEST_FEE_WEI = 1n;

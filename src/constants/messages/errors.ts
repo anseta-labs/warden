@@ -63,6 +63,31 @@ const INVALID_0x02_DEPOSIT_VALUE_NOT_WHOLE_NUMBER_OF_ETH =
 const INVALID_0x02_TOP_UP_VALUE_BELOW_MINIMUM =
   '0x02 top-up must be at least 1 ETH';
 
+// EIP-7002 execution-layer withdrawal requests (partial + full-exit sentinel)
+const INVALID_TX_TO_ADDR_NOT_EIP7002_WITHDRAWAL_PREDEPLOY =
+  'Transaction "to" is not the EIP-7002 withdrawal request predeploy contract';
+const INVALID_EIP7002_VALUE_BELOW_MIN_WITHDRAWAL_REQUEST_FEE =
+  'Transaction value must cover the EIP-7002 withdrawal request fee (minimum 1 wei)';
+const INVALID_EIP7002_CALLDATA_INVALID = 'Invalid transaction calldata';
+const INVALID_EIP7002_CALLDATA_LENGTH =
+  'EIP-7002 withdrawal request calldata must be exactly 56 bytes (pubkey + uint64 amount)';
+const INVALID_EIP7002_BLS_G1_PUBKEY_INVALID =
+  'Validator pubkey is not a valid BLS12-381 G1 public key (invalid encoding or not on the prime-order subgroup)';
+const INVALID_EIP7002_PARTIAL_AMOUNT_ZERO_FULL_EXIT_SENTINEL =
+  'Withdrawal amount is zero: under EIP-7002 this requests a full validator exit, not a partial withdrawal. Use a full-exit flow instead.';
+const INVALID_EIP7002_FULL_EXIT_AMOUNT_MUST_BE_ZERO =
+  'Force-exit calldata must have amount = 0. For partial withdrawals use the withdraw endpoint instead.';
+const INVALID_EIP7002_ARGS_VALIDATOR_PUBKEY_MISMATCH =
+  'Validator pubkey in calldata does not match args.validatorPublicKey';
+const INVALID_EIP7002_ARGS_AMOUNT_WEI_NOT_INTEGER =
+  'args.amountWei is not a valid integer string';
+const INVALID_EIP7002_ARGS_AMOUNT_WEI_NEGATIVE =
+  'args.amountWei must be non-negative';
+const INVALID_EIP7002_ARGS_AMOUNT_WEI_NOT_GWEI_MULTIPLE =
+  'args.amountWei must be a multiple of 1 gwei to match uint64 gwei in calldata';
+const INVALID_EIP7002_ARGS_AMOUNT_WEI_MISMATCH_CALLDATA =
+  'Calldata amount (gwei) does not match args.amountWei / 1e9 (developer API must encode gwei in the uint64 field)';
+
 export const ERRORS = {
   INVALID_PARAMS,
   TRANSACTION_VALIDATION_FAILED,
@@ -104,5 +129,17 @@ export const ERRORS = {
     BLS_SIGNATURE_DID_NOT_VERIFY,
     INVALID_0x02_DEPOSIT_VALUE_NOT_WHOLE_NUMBER_OF_ETH,
     INVALID_0x02_TOP_UP_VALUE_BELOW_MINIMUM,
+    INVALID_TX_TO_ADDR_NOT_EIP7002_WITHDRAWAL_PREDEPLOY,
+    INVALID_EIP7002_VALUE_BELOW_MIN_WITHDRAWAL_REQUEST_FEE,
+    INVALID_EIP7002_CALLDATA_INVALID,
+    INVALID_EIP7002_CALLDATA_LENGTH,
+    INVALID_EIP7002_BLS_G1_PUBKEY_INVALID,
+    INVALID_EIP7002_PARTIAL_AMOUNT_ZERO_FULL_EXIT_SENTINEL,
+    INVALID_EIP7002_FULL_EXIT_AMOUNT_MUST_BE_ZERO,
+    INVALID_EIP7002_ARGS_VALIDATOR_PUBKEY_MISMATCH,
+    INVALID_EIP7002_ARGS_AMOUNT_WEI_NOT_INTEGER,
+    INVALID_EIP7002_ARGS_AMOUNT_WEI_NEGATIVE,
+    INVALID_EIP7002_ARGS_AMOUNT_WEI_NOT_GWEI_MULTIPLE,
+    INVALID_EIP7002_ARGS_AMOUNT_WEI_MISMATCH_CALLDATA,
   },
 };

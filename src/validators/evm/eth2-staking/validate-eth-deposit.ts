@@ -29,13 +29,13 @@ import {
   hashDepositDataTreeRoot,
 } from './ssz-roots';
 import { ERRORS } from '../../../constants/messages/errors';
+import type { EthBeaconStaticValidationResult } from './validation-result';
+import { isAllZero } from '../../../utils/validation';
 
 const depositInterface = new Interface([DEPOSIT_FUNC_SIGNATURE]);
 const depositSelector = getBytes(
   depositInterface.getFunction(DEPOSIT_FUNC_NAME)!.selector,
 );
-
-export type EthDepositValidationResult = { ok: boolean; reason?: string };
 
 /**
  * Full static validation for a beacon `deposit` call (shape -> ABI -> semantics ->
@@ -53,7 +53,7 @@ export function validateEthBeaconDeposit(
   userAddress: string,
   requestChainId: number | undefined,
   network: EthNetwork,
-): EthDepositValidationResult {
+): EthBeaconStaticValidationResult {
   if (!userAddress) {
     return { ok: false, reason: ERRORS.INVALID_USER_ADDR };
   }
@@ -326,10 +326,6 @@ function validatePectra0x02ValueWei(valueWei: bigint): string | null {
     return null;
   }
   return null;
-}
-
-function isAllZero(bytes: Uint8Array): boolean {
-  return bytes.every((b) => b === 0);
 }
 
 function toBytes(x: string | Uint8Array): Uint8Array {

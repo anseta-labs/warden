@@ -27,8 +27,10 @@ import {
 const warden = new Warden();
 
 const chains = warden.getSupportedChains(); // e.g. [1, 560048]
-warden.getSupportedTransactionTypes(chains[0]); // e.g. ['DEPOSIT','EXIT']
+warden.getSupportedTransactionTypes(chains[0]); // e.g. ['DEPOSIT', 'FORCE_EXIT', 'WITHDRAW']
 warden.isSupported(chains[0], TransactionType.DEPOSIT); // true if registered
+warden.isSupported(1, TransactionType.WITHDRAW); // EIP-7002 partial withdrawal
+warden.isSupported(1, TransactionType.FORCE_EXIT); // EIP-7002 full-exit (0 gwei in calldata)
 
 // Unsigned EIP-1559 (or legacy) tx hex from your API — do not sign before validating
 const request: ValidationRequest = {
@@ -49,7 +51,19 @@ if (result.isValid) {
 }
 ```
 
-For a full ETH2 deposit example (building or decoding txs), see **`examples/01_basic_eth2_deposit.ts`** (run with `pnpm exec ts-node examples/01_basic_eth2_deposit.ts` from the repo root).
+## Examples
+
+Runnable scripts under **`examples/`** (from the repo root, use `pnpm exec ts-node examples/<file>.ts`):
+
+| File                                  | What it covers                                                                                            |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `01_basic_eth2_deposit.ts`            | **`DEPOSIT`**: valid beacon deposit vs withdrawal-credentials mismatch                                    |
+| `02_eip7002_partial_and_full_exit.ts` | **`WITHDRAW`** and **`FORCE_EXIT`**: EIP-7002 predeploy, partial amount vs full-exit (0 gwei in calldata) |
+
+```bash
+pnpm exec ts-node examples/01_basic_eth2_deposit.ts
+pnpm exec ts-node examples/02_eip7002_partial_and_full_exit.ts
+```
 
 ## Scripts
 

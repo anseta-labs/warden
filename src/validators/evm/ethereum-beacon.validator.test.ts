@@ -8,6 +8,7 @@ import { TransactionType } from '../../types';
 import {
   DEPOSIT_FUNC_NAME,
   DEPOSIT_FUNC_SIGNATURE,
+  EIP7002_WITHDRAWAL_REQUEST_PREDEPLOY,
   GWEI,
 } from './eth2-staking/constants';
 import { ETH_MAINNET } from './eth2-staking/networks';
@@ -63,6 +64,48 @@ function encodeDepositCalldata(parts: {
     hexlify(parts.signature),
     hexlify(parts.depositDataRoot),
   ]);
+}
+
+const sampleWithdrawalPubkey = decodeDepositCalldata(
+  Transaction.from(depositFixtures.mainnet_32eth_0x01).data,
+).pubkey;
+
+const otherDepositPubkey = decodeDepositCalldata(
+  Transaction.from(depositFixtures.mainnet_32eth_0x02).data,
+).pubkey;
+
+function buildEip7002UnsignedTx(params: {
+  chainId: number;
+  pubkey: Uint8Array;
+  amountGwei: bigint;
+  valueWei: bigint;
+  to?: string;
+  dataSliceLen?: number;
+}): string {
+  const amountBe = new Uint8Array(8);
+  let v = params.amountGwei;
+  for (let i = 7; i >= 0; i--) {
+    amountBe[i] = Number(v & 0xffn);
+    v >>= 8n;
+  }
+  const full = new Uint8Array(56);
+  full.set(params.pubkey, 0);
+  full.set(amountBe, 48);
+  const data =
+    params.dataSliceLen != null
+      ? hexlify(full.subarray(0, params.dataSliceLen))
+      : hexlify(full);
+  return Transaction.from({
+    type: 2,
+    to: params.to ?? EIP7002_WITHDRAWAL_REQUEST_PREDEPLOY,
+    value: params.valueWei,
+    data,
+    chainId: params.chainId,
+    nonce: 0,
+    gasLimit: 150_000n,
+    maxFeePerGas: 50n * 10n ** 9n,
+    maxPriorityFeePerGas: 1n * 10n ** 9n,
+  }).unsignedSerialized;
 }
 
 describe('EthereumBeaconValidator', () => {
@@ -190,7 +233,7 @@ describe('EthereumBeaconValidator', () => {
       expect(r.reason).toMatch(/whole number of ETH/);
     });
 
-    it('rejects DEPOSIT for non-DEPOSIT transaction type', () => {
+    it('rejects unsupported transaction type (e.g. STAKE)', () => {
       const r = validator.validate(
         depositFixtures.mainnet_32eth_0x01,
         TransactionType.STAKE,
@@ -199,7 +242,9 @@ describe('EthereumBeaconValidator', () => {
         mainnetContext(),
       );
       expect(r.isValid).toBe(false);
-      expect(r.reason).toMatch(/Only DEPOSIT/);
+      expect(r.reason).toMatch(
+        /Only DEPOSIT, WITHDRAW, FORCE_EXIT are supported/,
+      );
     });
 
     it('rejects when Warden context chainId does not match this validator network', () => {
@@ -217,11 +262,213 @@ describe('EthereumBeaconValidator', () => {
     });
   });
 
-  describe('Withdrawals', () => {
-    // TODO: Add later
+  describe('Partial Withdrawals (EIP-7002)', () => {
+    const sixtyEightEthGwei = 68n * 10n ** 9n;
+    const withdrawalFeeWei = 1_000_000_000_000n;
+
+    function validateWithdraw(
+      hex: string,
+      args?: { validatorPublicKey?: string; amountWei?: string },
+    ) {
+      return validator.validate(
+        hex,
+        TransactionType.WITHDRAW,
+        staker,
+        args,
+        mainnetContext(),
+      );
+    }
+
+    it('accepts a valid EIP-7002 partial withdrawal request tx', () => {
+      const hex = buildEip7002UnsignedTx({
+        chainId: ETH_MAINNET.chainId,
+        pubkey: sampleWithdrawalPubkey,
+        amountGwei: sixtyEightEthGwei,
+        valueWei: withdrawalFeeWei,
+      });
+      expect(validateWithdraw(hex).isValid).toBe(true);
+    });
+
+    it('accepts when args match pubkey and amountWei (gwei field)', () => {
+      const hex = buildEip7002UnsignedTx({
+        chainId: ETH_MAINNET.chainId,
+        pubkey: sampleWithdrawalPubkey,
+        amountGwei: sixtyEightEthGwei,
+        valueWei: withdrawalFeeWei,
+      });
+      const r = validateWithdraw(hex, {
+        validatorPublicKey: hexlify(sampleWithdrawalPubkey),
+        amountWei: (sixtyEightEthGwei * 10n ** 9n).toString(),
+      });
+      expect(r.isValid).toBe(true);
+    });
+
+    it('rejects calldata pubkey that is not a valid BLS12-381 G1 point', () => {
+      const invalidPk = new Uint8Array(
+        Array.from({ length: 48 }, (_, i) => (i === 0 ? 0xa1 : i % 255) + 1),
+      );
+      const hex = buildEip7002UnsignedTx({
+        chainId: ETH_MAINNET.chainId,
+        pubkey: invalidPk,
+        amountGwei: sixtyEightEthGwei,
+        valueWei: withdrawalFeeWei,
+      });
+      const r = validateWithdraw(hex);
+      expect(r.isValid).toBe(false);
+      expect(r.reason).toMatch(/BLS12-381 G1/);
+    });
+
+    it('rejects wrong predeploy "to"', () => {
+      const hex = buildEip7002UnsignedTx({
+        chainId: ETH_MAINNET.chainId,
+        pubkey: sampleWithdrawalPubkey,
+        amountGwei: sixtyEightEthGwei,
+        valueWei: withdrawalFeeWei,
+        to: '0x0000000000000000000000000000000000000001',
+      });
+      const r = validateWithdraw(hex);
+      expect(r.isValid).toBe(false);
+      expect(r.reason).toMatch(/EIP-7002 withdrawal request predeploy/);
+    });
+
+    it('rejects transaction chainId mismatch', () => {
+      const hex = buildEip7002UnsignedTx({
+        chainId: 999999,
+        pubkey: sampleWithdrawalPubkey,
+        amountGwei: sixtyEightEthGwei,
+        valueWei: withdrawalFeeWei,
+      });
+      const r = validator.validate(
+        hex,
+        TransactionType.WITHDRAW,
+        staker,
+        undefined,
+        mainnetContext(),
+      );
+      expect(r.isValid).toBe(false);
+      expect(r.reason).toMatch(/chainId does not match network configuration/);
+    });
+
+    it('rejects calldata not exactly 56 bytes', () => {
+      const hex = buildEip7002UnsignedTx({
+        chainId: ETH_MAINNET.chainId,
+        pubkey: sampleWithdrawalPubkey,
+        amountGwei: sixtyEightEthGwei,
+        valueWei: withdrawalFeeWei,
+        dataSliceLen: 40,
+      });
+      const r = validateWithdraw(hex);
+      expect(r.isValid).toBe(false);
+      expect(r.reason).toMatch(/exactly 56 bytes/);
+    });
+
+    it('rejects value below minimum fee', () => {
+      const hex = buildEip7002UnsignedTx({
+        chainId: ETH_MAINNET.chainId,
+        pubkey: sampleWithdrawalPubkey,
+        amountGwei: sixtyEightEthGwei,
+        valueWei: 0n,
+      });
+      const r = validateWithdraw(hex);
+      expect(r.isValid).toBe(false);
+      expect(r.reason).toMatch(/withdrawal request fee/);
+    });
+
+    it('rejects amount 0 (EIP-7002 full-exit sentinel; partial withdrawal only)', () => {
+      const hex = buildEip7002UnsignedTx({
+        chainId: ETH_MAINNET.chainId,
+        pubkey: sampleWithdrawalPubkey,
+        amountGwei: 0n,
+        valueWei: withdrawalFeeWei,
+      });
+      const r = validateWithdraw(hex);
+      expect(r.isValid).toBe(false);
+      expect(r.reason).toMatch(/full validator exit|partial withdrawal/);
+    });
+
+    it('rejects args.validatorPublicKey mismatch', () => {
+      const hex = buildEip7002UnsignedTx({
+        chainId: ETH_MAINNET.chainId,
+        pubkey: sampleWithdrawalPubkey,
+        amountGwei: sixtyEightEthGwei,
+        valueWei: withdrawalFeeWei,
+      });
+      const r = validateWithdraw(hex, {
+        validatorPublicKey: hexlify(otherDepositPubkey),
+      });
+      expect(r.isValid).toBe(false);
+      expect(r.reason).toMatch(/validatorPublicKey/);
+    });
+
+    it('rejects args.amountWei mismatch', () => {
+      const hex = buildEip7002UnsignedTx({
+        chainId: ETH_MAINNET.chainId,
+        pubkey: sampleWithdrawalPubkey,
+        amountGwei: sixtyEightEthGwei,
+        valueWei: withdrawalFeeWei,
+      });
+      const r = validateWithdraw(hex, { amountWei: '1' });
+      expect(r.isValid).toBe(false);
+      expect(r.reason).toMatch(/amountWei/);
+    });
+
+    it('rejects EIP-7002 tx when transaction type is DEPOSIT (wrong validator path)', () => {
+      const hex = buildEip7002UnsignedTx({
+        chainId: ETH_MAINNET.chainId,
+        pubkey: sampleWithdrawalPubkey,
+        amountGwei: sixtyEightEthGwei,
+        valueWei: withdrawalFeeWei,
+      });
+      const r = validator.validate(
+        hex,
+        TransactionType.DEPOSIT,
+        staker,
+        undefined,
+        mainnetContext(),
+      );
+      expect(r.isValid).toBe(false);
+      expect(r.reason).toMatch(/official beacon deposit contract/);
+    });
   });
 
-  describe('Force Exits', () => {
-    // TODO: Add later
+  describe('Full exit (EIP-7002)', () => {
+    const sixtyEightEthGwei = 68n * 10n ** 9n;
+    const withdrawalFeeWei = 1_000_000_000_000n;
+
+    function validateForceExit(
+      hex: string,
+      args?: { validatorPublicKey?: string; amountWei?: string },
+    ) {
+      return validator.validate(
+        hex,
+        TransactionType.FORCE_EXIT,
+        staker,
+        args,
+        mainnetContext(),
+      );
+    }
+
+    it('accepts amount 0 via TransactionType.FORCE_EXIT', () => {
+      const hex = buildEip7002UnsignedTx({
+        chainId: ETH_MAINNET.chainId,
+        pubkey: sampleWithdrawalPubkey,
+        amountGwei: 0n,
+        valueWei: withdrawalFeeWei,
+      });
+      const r = validateForceExit(hex);
+      expect(r.isValid).toBe(true);
+    });
+
+    it('rejects non-zero amount via TransactionType.FORCE_EXIT', () => {
+      const hex = buildEip7002UnsignedTx({
+        chainId: ETH_MAINNET.chainId,
+        pubkey: sampleWithdrawalPubkey,
+        amountGwei: sixtyEightEthGwei,
+        valueWei: withdrawalFeeWei,
+      });
+      const r = validateForceExit(hex);
+      expect(r.isValid).toBe(false);
+      expect(r.reason).toMatch(/amount = 0|Force-exit/);
+    });
   });
 });
