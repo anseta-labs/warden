@@ -120,7 +120,11 @@ export function validateEip7002WithdrawalRequest(
 
   let amountGwei = 0n;
   for (let i = 48; i < 56; i++) {
-    amountGwei = (amountGwei << 8n) | BigInt(dataBytes[i]!);
+    const b = dataBytes[i];
+    if (b === undefined) {
+      return { ok: false, reason: ERRORS.ETH.INVALID_EIP7002_CALLDATA_LENGTH };
+    }
+    amountGwei = (amountGwei << 8n) | BigInt(b);
   }
 
   // amount == 0 is the EIP-7002 / Electra full-exit sentinel (gwei field).
@@ -140,46 +144,64 @@ export function validateEip7002WithdrawalRequest(
   }
 
   const apiPk = args?.validatorPublicKey;
-  if (apiPk != null && String(apiPk).trim() !== '') {
-    const expected = normalizeOptionalPubkeyHex(String(apiPk));
-    if (expected !== pubkeyHex) {
-      return {
-        ok: false,
-        reason: ERRORS.ETH.INVALID_EIP7002_ARGS_VALIDATOR_PUBKEY_MISMATCH,
-      };
+  if (apiPk != null) {
+    const pkStr =
+      typeof apiPk === 'string'
+        ? apiPk
+        : typeof apiPk === 'number' || typeof apiPk === 'bigint'
+          ? apiPk.toString()
+          : null;
+    if (pkStr != null && pkStr.trim() !== '') {
+      const expected = normalizeOptionalPubkeyHex(pkStr);
+      if (expected !== pubkeyHex) {
+        return {
+          ok: false,
+          reason: ERRORS.ETH.INVALID_EIP7002_ARGS_VALIDATOR_PUBKEY_MISMATCH,
+        };
+      }
     }
   }
 
   if (mode === 'partial') {
     const apiAmountWei = args?.amountWei;
-    if (apiAmountWei != null && String(apiAmountWei).trim() !== '') {
-      let wei: bigint;
-      try {
-        wei = BigInt(String(apiAmountWei));
-      } catch {
-        return {
-          ok: false,
-          reason: ERRORS.ETH.INVALID_EIP7002_ARGS_AMOUNT_WEI_NOT_INTEGER,
-        };
-      }
-      if (wei < 0n) {
-        return {
-          ok: false,
-          reason: ERRORS.ETH.INVALID_EIP7002_ARGS_AMOUNT_WEI_NEGATIVE,
-        };
-      }
-      if (wei % GWEI !== 0n) {
-        return {
-          ok: false,
-          reason: ERRORS.ETH.INVALID_EIP7002_ARGS_AMOUNT_WEI_NOT_GWEI_MULTIPLE,
-        };
-      }
-      const gweiFromApi = wei / GWEI;
-      if (gweiFromApi !== amountGwei) {
-        return {
-          ok: false,
-          reason: ERRORS.ETH.INVALID_EIP7002_ARGS_AMOUNT_WEI_MISMATCH_CALLDATA,
-        };
+    if (apiAmountWei != null) {
+      const amountStr =
+        typeof apiAmountWei === 'string'
+          ? apiAmountWei
+          : typeof apiAmountWei === 'number' || typeof apiAmountWei === 'bigint'
+            ? apiAmountWei.toString()
+            : null;
+      if (amountStr != null && amountStr.trim() !== '') {
+        let wei: bigint;
+        try {
+          wei = BigInt(amountStr);
+        } catch {
+          return {
+            ok: false,
+            reason: ERRORS.ETH.INVALID_EIP7002_ARGS_AMOUNT_WEI_NOT_INTEGER,
+          };
+        }
+        if (wei < 0n) {
+          return {
+            ok: false,
+            reason: ERRORS.ETH.INVALID_EIP7002_ARGS_AMOUNT_WEI_NEGATIVE,
+          };
+        }
+        if (wei % GWEI !== 0n) {
+          return {
+            ok: false,
+            reason:
+              ERRORS.ETH.INVALID_EIP7002_ARGS_AMOUNT_WEI_NOT_GWEI_MULTIPLE,
+          };
+        }
+        const gweiFromApi = wei / GWEI;
+        if (gweiFromApi !== amountGwei) {
+          return {
+            ok: false,
+            reason:
+              ERRORS.ETH.INVALID_EIP7002_ARGS_AMOUNT_WEI_MISMATCH_CALLDATA,
+          };
+        }
       }
     }
   }

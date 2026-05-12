@@ -30,6 +30,7 @@
   "scripts": {
     "preinstall": "npx only-allow pnpm",
     "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
     "test": "jest",
     "prepublishOnly": "pnpm run clean && pnpm run build && pnpm test",
     "generate-eth2-fixtures": "ts-node scripts/generate-eth2-deposit-fixtures.ts",
@@ -43,18 +44,18 @@
   "packageManager": "pnpm@10.27.0",
   "devDependencies": {
     "@babel/preset-env": "^7.29.2",
+    "@eslint/js": "^9.39.4",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.10.2",
-    "@typescript-eslint/eslint-plugin": "^8.18.2",
-    "@typescript-eslint/parser": "^8.18.2",
     "babel-jest": "^29.7.0",
-    "eslint": "^8.57.1",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-prettier": "^5.2.1",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.2.3",
     "jest": "^29.7.0",
     "prettier": "^3.4.2",
     "ts-jest": "^29.2.5",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.59.3"
   },
   "dependencies": {
     "@chainsafe/blst": "^2.2.0",

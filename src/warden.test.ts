@@ -61,7 +61,7 @@ describe('Warden', () => {
         ...base(),
         chainId: 1.5,
         transactionType: TransactionType.DEPOSIT,
-      } as never).isValid,
+      }).isValid,
     ).toBe(false);
   });
 
@@ -130,7 +130,7 @@ describe('Warden', () => {
       TransactionType.WITHDRAW,
     ]);
     expect(warden.getSupportedTransactionTypes(999)).toEqual([]);
-    expect(warden.getSupportedTransactionTypes(1.5 as never)).toEqual([]);
+    expect(warden.getSupportedTransactionTypes(1.5)).toEqual([]);
 
     const pairs = warden.getSupportedChainTypePairs();
     expect(pairs).toEqual([
