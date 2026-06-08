@@ -6,21 +6,21 @@ import {
   ValidationResult,
 } from '../../types';
 import { BaseValidator } from '../base.validator';
-import type { EthNetwork } from './eth2-staking/networks';
+import type { SolanaNetwork } from './networks';
 import type { BaseValidatorValidationResult } from '../../types';
-import { validateEthBeaconDeposit } from './eth2-staking/validate-eth-deposit';
-import { validateEip7002WithdrawalRequest } from './eth2-staking/validate-eip7002-withdrawal';
+import { validateSolanaNativeStake } from './validate-stake';
+import { validateSolanaUnstake } from './validate-unstake';
 
-export class EthereumBeaconValidator extends BaseValidator {
-  constructor(private readonly network: EthNetwork) {
+export class SolanaNativeValidator extends BaseValidator {
+  constructor(private readonly network: SolanaNetwork) {
     super();
   }
 
   getSupportedTransactionTypes(): TransactionType[] {
     return [
-      TransactionType.DEPOSIT,
+      TransactionType.STAKE,
+      TransactionType.UNSTAKE,
       TransactionType.WITHDRAW,
-      TransactionType.FORCE_EXIT,
     ];
   }
 
@@ -35,13 +35,14 @@ export class EthereumBeaconValidator extends BaseValidator {
       typeof _context?.chainId === 'number' ? _context.chainId : undefined;
 
     switch (transactionType) {
-      case TransactionType.DEPOSIT: {
+      case TransactionType.STAKE: {
         const valResult: BaseValidatorValidationResult =
-          validateEthBeaconDeposit(
+          validateSolanaNativeStake(
             unsignedTransaction,
             userAddress,
             chainId,
             this.network,
+            args,
           );
         if (!valResult.ok) {
           return {
@@ -51,34 +52,14 @@ export class EthereumBeaconValidator extends BaseValidator {
         }
         return this.safe();
       }
-      case TransactionType.WITHDRAW: {
-        const valResult: BaseValidatorValidationResult =
-          validateEip7002WithdrawalRequest(
-            unsignedTransaction,
-            userAddress,
-            chainId,
-            this.network,
-            args,
-            'partial',
-          );
-        if (!valResult.ok) {
-          return {
-            isValid: false,
-            reason: valResult.reason ?? ERRORS.TRANSACTION_VALIDATION_FAILED,
-          };
-        }
-        return this.safe();
-      }
-      case TransactionType.FORCE_EXIT: {
-        const valResult: BaseValidatorValidationResult =
-          validateEip7002WithdrawalRequest(
-            unsignedTransaction,
-            userAddress,
-            chainId,
-            this.network,
-            args,
-            'full-exit',
-          );
+      case TransactionType.UNSTAKE: {
+        const valResult: BaseValidatorValidationResult = validateSolanaUnstake(
+          unsignedTransaction,
+          userAddress,
+          chainId,
+          this.network,
+          args,
+        );
         if (!valResult.ok) {
           return {
             isValid: false,
@@ -89,7 +70,7 @@ export class EthereumBeaconValidator extends BaseValidator {
       }
       default:
         return this.blocked(
-          `Only ${this.getSupportedTransactionTypes().join(', ')} are supported for this Ethereum beacon validator.`,
+          `Only ${this.getSupportedTransactionTypes().join(', ')} are supported for this Solana validator.`,
         );
     }
   }

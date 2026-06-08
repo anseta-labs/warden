@@ -2,11 +2,11 @@ import { BaseValidator } from './base.validator';
 import { TransactionType } from '../types';
 import { ETH_HOODI, ETH_MAINNET } from './evm/eth2-staking/networks';
 import { EthereumBeaconValidator } from './evm/ethereum-beacon.validator';
+import { SolanaNativeValidator, SOLANA_MAINNET } from './solana';
 
 /**
  * Map key: `${chainId}:${TransactionType}` (see {@link makeValidatorRegistryKey}).
  * Register a validator for each (chain, operation) pair the library supports.
-
  *
  * for example:
  *    [
@@ -31,6 +31,7 @@ export function makeValidatorRegistryKey(
   return `${chainId}:${transactionType}`;
 }
 
+// ETH validator
 const ethereumMainnetValidator = new EthereumBeaconValidator(ETH_MAINNET);
 const ethereumHoodiValidator = new EthereumBeaconValidator(ETH_HOODI);
 
@@ -58,4 +59,20 @@ validatorRegistry.set(
 validatorRegistry.set(
   makeValidatorRegistryKey(ETH_HOODI.chainId, TransactionType.FORCE_EXIT),
   ethereumHoodiValidator,
+);
+
+// Solana validator
+const solanaMainnetValidator = new SolanaNativeValidator(SOLANA_MAINNET);
+
+validatorRegistry.set(
+  makeValidatorRegistryKey(SOLANA_MAINNET.chainId, TransactionType.STAKE),
+  solanaMainnetValidator,
+);
+validatorRegistry.set(
+  makeValidatorRegistryKey(SOLANA_MAINNET.chainId, TransactionType.UNSTAKE),
+  solanaMainnetValidator,
+);
+validatorRegistry.set(
+  makeValidatorRegistryKey(SOLANA_MAINNET.chainId, TransactionType.WITHDRAW),
+  solanaMainnetValidator,
 );

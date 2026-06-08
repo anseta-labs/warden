@@ -2,6 +2,11 @@
 
 TypeScript library for **stakeFi integrators**: validate **unsigned** transactions (e.g. EVM hex) **before** signing, using rules keyed by `chainId` and `TransactionType`.
 
+## Supported Chains
+
+- Ethereum
+- Solana
+
 ## Requirements
 
 - Node **20+**

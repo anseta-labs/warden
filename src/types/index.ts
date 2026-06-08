@@ -31,6 +31,15 @@ export interface ValidationContext {
   [key: string]: unknown;
 }
 
+/**
+ * Internal outcome of protocol-specific static checks (`ok` + optional `reason`)
+ * before mapping to the public ValidationResult returned by Warden.validate()
+ */
+export type BaseValidatorValidationResult = {
+  ok: boolean;
+  reason?: string;
+};
+
 export enum TransactionType {
   // eth2 staking specific transaction types
   DEPOSIT = 'DEPOSIT',

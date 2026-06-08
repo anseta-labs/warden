@@ -77,10 +77,14 @@ export class Warden {
   }
 
   /**
-   * @param unsignedTransaction Unsigned EVM transaction (hex) from the dev API
-   * @param chainId L1 chain the user intends (must match the tx, e.g. 1, 560048)
+   * @param unsignedTransaction Unsigned transaction payload from the dev API (`0x`-prefixed hex for EVM,
+   *   base64 for Solana legacy wire format)
+   * @param chainId L1 chain the user intends (must match the tx, e.g. `1`, `560048` for Ethereum, `101` for Solana mainnet-beta)
    * @param userAddress Address of the wallet that will sign
    * @param transactionType Operation the user expects (must match a registered pair with `chainId`)
+   * @param args Optional integrator hints; context: optional; Warden merges chainId into context for validators
+   * @param context Optional context for the validator
+   * @returns ValidationResult
    */
   validate(request: ValidationRequest): ValidationResult {
     if (isNullOrUndefined(request)) {

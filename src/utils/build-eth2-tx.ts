@@ -42,7 +42,7 @@ interface ApiTxObject {
   maxFeePerGas: string | null;
   chainId: string | null;
   sig: string | null;
-  accessList: unknown | null;
+  accessList?: unknown;
 }
 
 interface ApiTransaction {
@@ -306,7 +306,6 @@ export async function buildEth2DepositApiResponse(
             maxFeePerGas: DEPOSIT_TX_MAX_FEE_PER_GAS.toString(),
             chainId: cfg.chainId,
             sig: null,
-            accessList: null,
           },
           encodedTx,
           description: `${amountEth >= 32n ? 'Deposit' : 'Top-up'} ${amountEth} ETH for ETH2 validator 0x${Buffer.from(pubkey).toString('hex').slice(0, 16)}...`,

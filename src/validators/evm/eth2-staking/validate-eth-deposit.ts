@@ -21,15 +21,16 @@ import {
 import type { EthNetwork } from './networks';
 import {
   isDepositContract,
+  toBytes,
   withdrawalCredentialsToExecutionAddress,
-} from './networks';
+} from './utils';
 import {
   computeDepositSigningRoot,
   computeDomain,
   hashDepositDataTreeRoot,
 } from './ssz-roots';
 import { ERRORS } from '../../../constants/messages/errors';
-import type { EthBeaconStaticValidationResult } from './validation-result';
+import type { BaseValidatorValidationResult } from '../../../types';
 import { isAllZero } from '../../../utils/validation';
 
 const depositInterface = new Interface([DEPOSIT_FUNC_SIGNATURE]);
@@ -53,7 +54,7 @@ export function validateEthBeaconDeposit(
   userAddress: string,
   requestChainId: number | undefined,
   network: EthNetwork,
-): EthBeaconStaticValidationResult {
+): BaseValidatorValidationResult {
   if (!userAddress) {
     return { ok: false, reason: ERRORS.INVALID_USER_ADDR };
   }
@@ -326,11 +327,4 @@ function validatePectra0x02ValueWei(valueWei: bigint): string | null {
     return null;
   }
   return null;
-}
-
-function toBytes(x: string | Uint8Array): Uint8Array {
-  if (x instanceof Uint8Array) {
-    return new Uint8Array(x);
-  }
-  return new Uint8Array(getBytes(x));
 }

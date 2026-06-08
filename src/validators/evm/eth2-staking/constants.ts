@@ -1,3 +1,9 @@
+// ethereum mainnet and hoodi deposit contract addresses
+export const ETH2_DEPOSIT_CONTRACT_MAINNET =
+  '0x00000000219ab540356cBB839Cbe05303d7705Fa';
+export const ETH2_DEPOSIT_CONTRACT_HOODI =
+  '0x00000000219ab540356cBB839Cbe05303d7705Fa';
+
 // deposit function signature
 export const DEPOSIT_FUNC_SIGNATURE =
   'function deposit(bytes,bytes,bytes,bytes32) payable';
