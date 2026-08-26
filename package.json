@@ -1,12 +1,12 @@
 {
-  "name": "@bcwresearch/stakefi-warden",
+  "name": "@anseta/warden",
   "version": "0.1.0",
-  "description": "Zero-trust transaction validation for StakeFi integrators (validate unsigned txs before signing).",
+  "description": "Zero-trust transaction validation for Anseta integrators (validate unsigned txs before signing).",
   "license": "MIT",
   "author": "BCW Research",
   "repository": {
     "type": "git",
-    "url": "https://github.com/BCWResearch/stakefi-warden.git"
+    "url": "https://github.com/BCWResearch/anseta-warden.git"
   },
   "publishConfig": {
     "access": "public",

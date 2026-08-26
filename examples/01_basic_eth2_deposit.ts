@@ -2,14 +2,14 @@
  * Basic example: validate an unsigned EIP-1559 transaction that calls the official
  * beacon deposit contract with post-Pectra (0x02) withdrawal credentials.
  *
- * In production you obtain `unsignedTransaction` from our developer API (stakeFi
+ * In production you obtain `unsignedTransaction` from our developer API (Anseta
  * developer API). Here we build a structurally identical deposit using some utils.
  *
  * Run from the package root:
  *   pnpm exec ts-node examples/01_basic_eth2_deposit.ts
  */
 
-import { Warden, TransactionType } from '../src/index'; // or import { Warden, TransactionType } from '@bcwresearch/stakefi-warden';
+import { Warden, TransactionType } from '../src/index'; // or import { Warden, TransactionType } from '@anseta/warden';
 import { buildEth2DepositApiResponse } from '../src/utils/build-eth2-tx';
 
 async function main() {

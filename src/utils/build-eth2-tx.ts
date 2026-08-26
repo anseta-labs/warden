@@ -61,7 +61,7 @@ interface ApiResponse {
   };
 }
 
-//  Re-use network config (aligned with stakefi-warden deposit networks)
+//  Re-use network config (aligned with anseta-warden deposit networks)
 type Network = 'mainnet' | 'hoodi';
 
 const NETWORKS: Record<
