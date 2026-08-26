@@ -6,7 +6,7 @@
   "author": "BCW Research",
   "repository": {
     "type": "git",
-    "url": "https://github.com/BCWResearch/anseta-warden.git"
+    "url": "https://github.com/anseta-labs/warden.git"
   },
   "publishConfig": {
     "access": "public",
