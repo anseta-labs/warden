@@ -127,6 +127,8 @@ function buildPartialUnstakeTx(opts: {
   splitAccount: PublicKey;
   lamports: number;
   stakerAuth?: PublicKey;
+  rentLamports?: number;
+  space?: number;
 }): string {
   const {
     staker,
@@ -134,6 +136,8 @@ function buildPartialUnstakeTx(opts: {
     splitAccount,
     lamports,
     stakerAuth = staker,
+    rentLamports = 2_282_880,
+    space = StakeProgram.space,
   } = opts;
   const tx = new Transaction();
   tx.recentBlockhash = '11111111111111111111111111111111';
@@ -145,8 +149,8 @@ function buildPartialUnstakeTx(opts: {
       newAccountPubkey: splitAccount,
       basePubkey: staker,
       seed: 'stakefiunstkmq08m33v',
-      lamports: 2_282_880,
-      space: StakeProgram.space,
+      lamports: rentLamports,
+      space,
       programId: StakeProgram.programId,
     }),
   );
@@ -1003,6 +1007,40 @@ describe('SolanaNativeValidator', () => {
         const r = validateUnstakeTx(tx);
         expect(r.isValid).toBe(false);
         expect(r.reason).toMatch(/Unexpected instruction count/);
+      });
+
+      describe('rent funding', () => {
+        function partialUnstake(o: { rentLamports?: number; space?: number }) {
+          return buildPartialUnstakeTx({
+            staker: STAKER_PK,
+            stakeAccount: SOURCE_STAKE_PK,
+            splitAccount: SPLIT_ACCT_PK,
+            lamports: Number(PARTIAL_AMOUNT),
+            ...o,
+          });
+        }
+
+        it('accepts rent up to the 0.01 SOL cap', () => {
+          expect(validateUnstakeTx(partialUnstake({})).isValid).toBe(true);
+          expect(
+            validateUnstakeTx(partialUnstake({ rentLamports: 10_000_000 }))
+              .isValid,
+          ).toBe(true);
+        });
+
+        it('rejects rent above the cap', () => {
+          const r = validateUnstakeTx(
+            partialUnstake({ rentLamports: 100_000_000_000 }), // 100 SOL
+          );
+          expect(r.isValid).toBe(false);
+          expect(r.reason).toMatch(/rent funding too high/);
+        });
+
+        it('rejects a non-standard account size', () => {
+          const r = validateUnstakeTx(partialUnstake({ space: 10_000 }));
+          expect(r.isValid).toBe(false);
+          expect(r.reason).toMatch(/account size/);
+        });
       });
     });
   });
