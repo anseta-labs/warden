@@ -6,6 +6,7 @@
 import { createHash, randomBytes } from 'crypto';
 import { SecretKey } from '@chainsafe/blst';
 import { getBytes, hexlify, Interface, Transaction } from 'ethers';
+import type { ActionArguments } from '../../types';
 import { TransactionType } from '../../types';
 import {
   DEPOSIT_FUNC_NAME,
@@ -429,10 +430,7 @@ describe('EthereumBeaconValidator', () => {
     const sixtyEightEthGwei = 68n * 10n ** 9n;
     const withdrawalFeeWei = 1_000_000_000_000n;
 
-    function validateWithdraw(
-      hex: string,
-      args?: { validatorPublicKey?: string; amountWei?: string },
-    ) {
+    function validateWithdraw(hex: string, args?: ActionArguments) {
       return validator.validate(
         hex,
         TransactionType.WITHDRAW,
@@ -442,14 +440,16 @@ describe('EthereumBeaconValidator', () => {
       );
     }
 
-    it('accepts a valid EIP-7002 partial withdrawal request tx', () => {
+    it('rejects a partial withdrawal when args are omitted (fail closed)', () => {
       const hex = buildEip7002UnsignedTx({
         chainId: ETH_MAINNET.chainId,
         pubkey: sampleWithdrawalPubkey,
         amountGwei: sixtyEightEthGwei,
         valueWei: withdrawalFeeWei,
       });
-      expect(validateWithdraw(hex).isValid).toBe(true);
+      const r = validateWithdraw(hex);
+      expect(r.isValid).toBe(false);
+      expect(r.reason).toMatch(/validatorPublicKey is required/);
     });
 
     it('accepts when args match pubkey and amountWei (gwei field)', () => {
@@ -570,7 +570,10 @@ describe('EthereumBeaconValidator', () => {
         amountGwei: sixtyEightEthGwei,
         valueWei: withdrawalFeeWei,
       });
-      const r = validateWithdraw(hex, { amountWei: '1' });
+      const r = validateWithdraw(hex, {
+        validatorPublicKey: hexlify(sampleWithdrawalPubkey),
+        amountWei: '1000000000',
+      });
       expect(r.isValid).toBe(false);
       expect(r.reason).toMatch(/amountWei/);
     });
@@ -591,6 +594,63 @@ describe('EthereumBeaconValidator', () => {
       );
       expect(r.isValid).toBe(false);
       expect(r.reason).toMatch(/official beacon deposit contract/);
+    });
+
+    describe('bindings and fee cap', () => {
+      const boundArgs = {
+        validatorPublicKey: hexlify(sampleWithdrawalPubkey),
+        amountWei: (sixtyEightEthGwei * GWEI).toString(),
+      };
+      function withdrawTx(valueWei = withdrawalFeeWei): string {
+        return buildEip7002UnsignedTx({
+          chainId: ETH_MAINNET.chainId,
+          pubkey: sampleWithdrawalPubkey,
+          amountGwei: sixtyEightEthGwei,
+          valueWei,
+        });
+      }
+
+      it('rejects a non-string validatorPublicKey instead of skipping the check', () => {
+        const r = validateWithdraw(withdrawTx(), {
+          ...boundArgs,
+          validatorPublicKey: { value: hexlify(sampleWithdrawalPubkey) },
+        });
+        expect(r.isValid).toBe(false);
+        expect(r.reason).toMatch(/48-byte hex string/);
+      });
+
+      it('rejects a partial withdrawal when amountWei is omitted', () => {
+        const r = validateWithdraw(withdrawTx(), {
+          validatorPublicKey: boundArgs.validatorPublicKey,
+        });
+        expect(r.isValid).toBe(false);
+        expect(r.reason).toMatch(/amountWei/);
+      });
+
+      it('rejects a request fee above the default cap', () => {
+        const r = validateWithdraw(withdrawTx(10n * ONE_ETH_WEI), boundArgs);
+        expect(r.isValid).toBe(false);
+        expect(r.reason).toMatch(/request fee/);
+      });
+
+      it('accepts a higher fee only when args.maxFeeWei allows it', () => {
+        const fee = 5n * 10n ** 16n; // 0.05 ETH
+        expect(validateWithdraw(withdrawTx(fee), boundArgs).isValid).toBe(
+          false,
+        );
+        const r = validateWithdraw(withdrawTx(fee), {
+          ...boundArgs,
+          maxFeeWei: fee.toString(),
+        });
+        expect(r.isValid).toBe(true);
+      });
+
+      it('rejects a max fee per gas above the cap', () => {
+        const hex = cloneTx(withdrawTx(), { maxFeePerGas: 10n ** 15n });
+        expect(validateWithdraw(hex, boundArgs).reason).toMatch(
+          /max fee per gas/,
+        );
+      });
     });
   });
 
@@ -618,8 +678,22 @@ describe('EthereumBeaconValidator', () => {
         amountGwei: 0n,
         valueWei: withdrawalFeeWei,
       });
-      const r = validateForceExit(hex);
+      const r = validateForceExit(hex, {
+        validatorPublicKey: hexlify(sampleWithdrawalPubkey),
+      });
       expect(r.isValid).toBe(true);
+    });
+
+    it('rejects FORCE_EXIT when validatorPublicKey is omitted (fail closed)', () => {
+      const hex = buildEip7002UnsignedTx({
+        chainId: ETH_MAINNET.chainId,
+        pubkey: sampleWithdrawalPubkey,
+        amountGwei: 0n,
+        valueWei: withdrawalFeeWei,
+      });
+      const r = validateForceExit(hex);
+      expect(r.isValid).toBe(false);
+      expect(r.reason).toMatch(/validatorPublicKey is required/);
     });
 
     it('rejects non-zero amount via TransactionType.FORCE_EXIT', () => {

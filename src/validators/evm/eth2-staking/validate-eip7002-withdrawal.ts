@@ -2,6 +2,7 @@ import { getAddress, getBytes, hexlify, Transaction } from 'ethers';
 import { ERRORS } from '../../../constants/messages/errors';
 import type { ActionArguments } from '../../../types';
 import {
+  EIP7002_DEFAULT_MAX_WITHDRAWAL_REQUEST_FEE_WEI,
   EIP7002_MIN_WITHDRAWAL_REQUEST_FEE_WEI,
   EIP7002_WITHDRAWAL_REQUEST_CALLDATA_BYTES,
   EIP7002_WITHDRAWAL_REQUEST_PREDEPLOY,
@@ -11,6 +12,13 @@ import type { EthNetwork } from './networks';
 import type { BaseValidatorValidationResult } from '../../../types';
 import { bls12_381 as bls } from '@noble/curves/bls12-381.js';
 import { isAllZero } from '../../../utils/validation';
+import {
+  readOptionalWei,
+  readRequiredGweiAlignedWei,
+  readRequiredValidatorPubkey,
+} from './args';
+import { validateGasFields } from './gas';
+import { validateTxEnvelope } from './envelope';
 
 const predeployChecksummed = getAddress(EIP7002_WITHDRAWAL_REQUEST_PREDEPLOY);
 
@@ -25,8 +33,15 @@ function normalizeOptionalPubkeyHex(value: string): string {
  * with 56-byte calldata (validator pubkey + uint64 amount in gwei, big-endian).
  *
  * Does not consult beacon state: cannot prove `userAddress` owns the validator’s withdrawal
- * credentials. Optional `args.validatorPublicKey` and `args.amountWei` let integrators bind
- * the tx to the developer API response (amountWei is ETH wei; calldata amount is gwei).
+ * credentials.
+ *
+ * Required integrator bindings (fail closed):
+ * - `args.validatorPublicKey` (both modes) - 48-byte hex pubkey the user approved.
+ * - `args.amountWei` (`partial` mode) - approved amount in wei (calldata carries gwei).
+ * Optional:
+ * - `args.maxFeeWei` - ceiling on `tx.value` (the request fee). Defaults to
+ *   {@link EIP7002_DEFAULT_MAX_WITHDRAWAL_REQUEST_FEE_WEI}. The predeploy does not
+ *   refund overpayment, so an uncapped value would be burned.
  *
  * **`mode`:** Under EIP-7002 / Electra, `amount == 0` (gwei) is the **full-exit** sentinel;
  * `amount > 0` requests a **partial** withdrawal. `partial` rejects `amount === 0`;
@@ -81,10 +96,24 @@ export function validateEip7002WithdrawalRequest(
       reason: ERRORS.INVALID_CHAIN_ID_NOT_MATCH_TRANSACTION,
     };
   }
+  const envelopeCheck = validateTxEnvelope(tx);
+  if (!envelopeCheck.ok) return envelopeCheck;
+  const gasCheck = validateGasFields(tx, args);
+  if (!gasCheck.ok) return gasCheck;
   if (tx.value < EIP7002_MIN_WITHDRAWAL_REQUEST_FEE_WEI) {
     return {
       ok: false,
       reason: ERRORS.ETH.INVALID_EIP7002_VALUE_BELOW_MIN_WITHDRAWAL_REQUEST_FEE,
+    };
+  }
+  const maxFee = readOptionalWei(args, 'maxFeeWei');
+  if (!maxFee.ok) return maxFee;
+  if (
+    tx.value > (maxFee.value ?? EIP7002_DEFAULT_MAX_WITHDRAWAL_REQUEST_FEE_WEI)
+  ) {
+    return {
+      ok: false,
+      reason: ERRORS.ETH.INVALID_EIP7002_VALUE_ABOVE_MAX_FEE,
     };
   }
 
@@ -143,66 +172,25 @@ export function validateEip7002WithdrawalRequest(
     };
   }
 
-  const apiPk = args?.validatorPublicKey;
-  if (apiPk != null) {
-    const pkStr =
-      typeof apiPk === 'string'
-        ? apiPk
-        : typeof apiPk === 'number' || typeof apiPk === 'bigint'
-          ? apiPk.toString()
-          : null;
-    if (pkStr != null && pkStr.trim() !== '') {
-      const expected = normalizeOptionalPubkeyHex(pkStr);
-      if (expected !== pubkeyHex) {
-        return {
-          ok: false,
-          reason: ERRORS.ETH.INVALID_EIP7002_ARGS_VALIDATOR_PUBKEY_MISMATCH,
-        };
-      }
-    }
+  // Required: bind to the validator the user approved (both modes).
+  const expectedPk = readRequiredValidatorPubkey(args);
+  if (!expectedPk.ok) return expectedPk;
+  if (expectedPk.value !== pubkeyHex) {
+    return {
+      ok: false,
+      reason: ERRORS.ETH.INVALID_EIP7002_ARGS_VALIDATOR_PUBKEY_MISMATCH,
+    };
   }
 
+  // Required in partial mode: bind the amount (args in wei, calldata in gwei).
   if (mode === 'partial') {
-    const apiAmountWei = args?.amountWei;
-    if (apiAmountWei != null) {
-      const amountStr =
-        typeof apiAmountWei === 'string'
-          ? apiAmountWei
-          : typeof apiAmountWei === 'number' || typeof apiAmountWei === 'bigint'
-            ? apiAmountWei.toString()
-            : null;
-      if (amountStr != null && amountStr.trim() !== '') {
-        let wei: bigint;
-        try {
-          wei = BigInt(amountStr);
-        } catch {
-          return {
-            ok: false,
-            reason: ERRORS.ETH.INVALID_EIP7002_ARGS_AMOUNT_WEI_NOT_INTEGER,
-          };
-        }
-        if (wei < 0n) {
-          return {
-            ok: false,
-            reason: ERRORS.ETH.INVALID_EIP7002_ARGS_AMOUNT_WEI_NEGATIVE,
-          };
-        }
-        if (wei % GWEI !== 0n) {
-          return {
-            ok: false,
-            reason:
-              ERRORS.ETH.INVALID_EIP7002_ARGS_AMOUNT_WEI_NOT_GWEI_MULTIPLE,
-          };
-        }
-        const gweiFromApi = wei / GWEI;
-        if (gweiFromApi !== amountGwei) {
-          return {
-            ok: false,
-            reason:
-              ERRORS.ETH.INVALID_EIP7002_ARGS_AMOUNT_WEI_MISMATCH_CALLDATA,
-          };
-        }
-      }
+    const expectedWei = readRequiredGweiAlignedWei(args, 'amountWei');
+    if (!expectedWei.ok) return expectedWei;
+    if (expectedWei.value / GWEI !== amountGwei) {
+      return {
+        ok: false,
+        reason: ERRORS.ETH.INVALID_EIP7002_ARGS_AMOUNT_WEI_MISMATCH_CALLDATA,
+      };
     }
   }
 
