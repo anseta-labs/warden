@@ -47,7 +47,7 @@ warden.isSupported(chains[0], TransactionType.DEPOSIT); // true if registered
 warden.isSupported(1, TransactionType.WITHDRAW); // EIP-7002 partial withdrawal
 warden.isSupported(1, TransactionType.FORCE_EXIT); // EIP-7002 full-exit (0 gwei in calldata)
 
-// Unsigned EIP-1559 (or legacy) tx hex from your API — do not sign before validating
+// Unsigned EIP-1559 (type 2) tx hex from your API — do not sign before validating
 const request: ValidationRequest = {
   unsignedTransaction: '0x02f8...', // RLP-serialized unsigned tx, 0x-prefixed
   userAddress: '0x...',
@@ -60,7 +60,8 @@ const request: ValidationRequest = {
   //   Solana STAKE: validatorAddress, amount
   // All EVM txs: must be EIP-1559 (type 2) with no access list. Gas fields are capped by
   //   default (500k gas limit, 500 gwei max fee, 50 gwei tip); raise with maxGasLimit,
-  //   maxFeePerGasWei, maxPriorityFeePerGasWei.
+  //   maxFeePerGasWei, maxPriorityFeePerGasWei when the unsigned hex already sets those
+  //   fields above the defaults (unset gas fields are allowed — the wallet fills them in).
   // Take bindings from your own approval records, not from the API response being validated.
 };
 
@@ -101,7 +102,8 @@ const options = {
     withdrawalAddress: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
     feeRecipient: '0x388C818CA8B9251b393131C08a736A67ccB19297',
     validatorName: 'my-validator-mainnet-01',
-    gasLimit: 36000000,
+    // Optional: proposer block gas-limit vote (informational). Not the deposit tx gasLimit.
+    gasLimit: 36_000_000,
   },
 };
 
@@ -113,6 +115,9 @@ const apiResp = await fetch(ansetaStakeEthTxEndpoint, options);
 
 const { data } = apiResp;
 
+// Stake encodedTx typically omits gas fields; Warden allows that (wallet fills them in).
+// Only pass args.maxGasLimit / maxFeePerGasWei / maxPriorityFeePerGasWei if the hex
+// already sets those above Warden's defaults (500k / 500 gwei / 50 gwei tip).
 const request: ValidationRequest = {
   unsignedTransaction: data.depositTransaction.encodedTx,
   userAddress: '0x...',

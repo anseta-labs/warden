@@ -22,7 +22,7 @@ export function withdrawalCredentialsToExecutionAddress(
   return getAddress(hexlify(creds.subarray(12, 32)));
 }
 
-// 32-byte withdrawal credentials: 0x01 + 0x0 * 11 + 20-byte eth1 address, or 0x00 (BLS).
+// 32-byte 0x01 credentials only: 0x01 + 11 zero bytes + 20-byte eth1 address.
 export function withdrawalCredentialsToEth1Address(
   creds: Uint8Array,
 ): string | null {
