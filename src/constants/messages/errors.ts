@@ -46,10 +46,8 @@ const INVALID_0x01_WITHDRAWAL_CREDENTIALS_LAYOUT =
   'Invalid 0x01 withdrawal credentials layout';
 const INVALID_WITHDRAWAL_CREDENTIALS_NOT_TARGET_STAKER =
   'Withdrawal credentials do not target the staker (user) address';
-const INVALID_BLS_WITHDRAWAL_CREDENTIALS_ALL_ZERO =
-  'BLS withdrawal credentials (0x00) are all zero';
 const INVALID_UNSUPPORTED_WITHDRAWAL_CREDENTIALS_PREFIX =
-  'Unsupported withdrawal credentials prefix (expected 0x00, 0x01, or 0x02)';
+  'Unsupported withdrawal credentials prefix: only 0x01 and 0x02 are accepted (0x00 BLS credentials cannot be tied to the user address)';
 const INVALID_BLS_SIGNATURE_LENGTH = 'BLS signature must be 96 bytes';
 const INVALID_DEPOSIT_DATA_ROOT_LENGTH = 'deposit_data_root must be 32 bytes';
 const INVALID_DEPOSIT_DATA_ROOT_NOT_MATCH_SSZ_ROOT =
@@ -88,6 +86,31 @@ const INVALID_EIP7002_ARGS_AMOUNT_WEI_NOT_GWEI_MULTIPLE =
 const INVALID_EIP7002_ARGS_AMOUNT_WEI_MISMATCH_CALLDATA =
   'Calldata amount (gwei) does not match args.amountWei / 1e9 (developer API must encode gwei in the uint64 field)';
 
+// Integrator-args bindings (fail closed: required bindings are never skipped)
+const MISSING_ARGS_VALIDATOR_PUBKEY =
+  'args.validatorPublicKey is required: the 48-byte BLS pubkey (hex string) of the validator the user approved';
+const INVALID_ARGS_VALIDATOR_PUBKEY_FORMAT =
+  'args.validatorPublicKey must be a 48-byte hex string';
+const MISSING_ARGS_AMOUNT_WEI =
+  'Required amount binding is missing: pass the approved amount in wei as a decimal string';
+const INVALID_ARGS_WEI_FORMAT =
+  'Value must be a non-negative integer as a decimal string or bigint';
+const INVALID_TX_TYPE_NOT_EIP1559 =
+  'Only EIP-1559 (type 2) transactions are accepted';
+const INVALID_TX_ACCESS_LIST_NOT_EMPTY =
+  'Transaction access list must be empty';
+const INVALID_GAS_LIMIT_ABOVE_MAX =
+  'Transaction gas limit exceeds the allowed maximum; pass args.maxGasLimit to allow a higher value';
+const INVALID_MAX_FEE_PER_GAS_ABOVE_MAX =
+  'Transaction max fee per gas (or gas price) exceeds the allowed maximum; pass args.maxFeePerGasWei to allow a higher value';
+const INVALID_PRIORITY_FEE_ABOVE_MAX =
+  'Transaction priority fee (tip) exceeds the allowed maximum; pass args.maxPriorityFeePerGasWei to allow a higher value';
+const INVALID_EIP7002_VALUE_ABOVE_MAX_FEE =
+  'Transaction value exceeds the maximum EIP-7002 request fee. The predeploy does not refund overpayment; pass args.maxFeeWei to allow a higher fee';
+
+const INVALID_BLS_WITHDRAWAL_CREDENTIALS_ALL_ZERO =
+  'BLS withdrawal credentials (0x00) are all zero';
+
 export const ERRORS = {
   INVALID_PARAMS,
   TRANSACTION_VALIDATION_FAILED,
@@ -116,10 +139,10 @@ export const ERRORS = {
     INVALID_BLS_PUBKEY_LENGTH,
     INVALID_BLS_PUBKEY_ALL_ZERO,
     INVALID_WITHDRAWAL_CREDENTIALS_LENGTH,
+    INVALID_BLS_WITHDRAWAL_CREDENTIALS_ALL_ZERO,
     INVALID_0x02_WITHDRAWAL_CREDENTIALS_LAYOUT,
     INVALID_0x01_WITHDRAWAL_CREDENTIALS_LAYOUT,
     INVALID_WITHDRAWAL_CREDENTIALS_NOT_TARGET_STAKER,
-    INVALID_BLS_WITHDRAWAL_CREDENTIALS_ALL_ZERO,
     INVALID_UNSUPPORTED_WITHDRAWAL_CREDENTIALS_PREFIX,
     INVALID_BLS_SIGNATURE_LENGTH,
     INVALID_DEPOSIT_DATA_ROOT_LENGTH,
@@ -141,5 +164,15 @@ export const ERRORS = {
     INVALID_EIP7002_ARGS_AMOUNT_WEI_NEGATIVE,
     INVALID_EIP7002_ARGS_AMOUNT_WEI_NOT_GWEI_MULTIPLE,
     INVALID_EIP7002_ARGS_AMOUNT_WEI_MISMATCH_CALLDATA,
+    MISSING_ARGS_VALIDATOR_PUBKEY,
+    INVALID_ARGS_VALIDATOR_PUBKEY_FORMAT,
+    MISSING_ARGS_AMOUNT_WEI,
+    INVALID_ARGS_WEI_FORMAT,
+    INVALID_EIP7002_VALUE_ABOVE_MAX_FEE,
+    INVALID_TX_TYPE_NOT_EIP1559,
+    INVALID_TX_ACCESS_LIST_NOT_EMPTY,
+    INVALID_GAS_LIMIT_ABOVE_MAX,
+    INVALID_MAX_FEE_PER_GAS_ABOVE_MAX,
+    INVALID_PRIORITY_FEE_ABOVE_MAX,
   },
 };

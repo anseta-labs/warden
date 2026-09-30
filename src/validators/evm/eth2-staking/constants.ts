@@ -33,3 +33,19 @@ export const EIP7002_WITHDRAWAL_REQUEST_CALLDATA_BYTES = 56;
 
 // Minimum fee (wei) for a withdrawal request per EIP-7002; actual fee is often higher
 export const EIP7002_MIN_WITHDRAWAL_REQUEST_FEE_WEI = 1n;
+
+/**
+ * Default ceiling on the EIP-7002 request fee (tx.value) when the integrator
+ * does not pass args.maxFeeWei. The fee is normally 1 wei and only rises
+ * exponentially under heavy request volume; the predeploy keeps any overpayment.
+ */
+export const EIP7002_DEFAULT_MAX_WITHDRAWAL_REQUEST_FEE_WEI =
+  1_000_000_000_000_000n;
+
+/**
+ * Default gas-field caps (overridable via args). Generous for normal use;
+ * worst-case fee = gas limit x max fee per gas = 500k x 500 gwei = 0.25 ETH.
+ */
+export const DEFAULT_MAX_GAS_LIMIT = 500_000n;
+export const DEFAULT_MAX_FEE_PER_GAS_WEI = 500n * 1_000_000_000n; // 500 gwei
+export const DEFAULT_MAX_PRIORITY_FEE_PER_GAS_WEI = 50n * 1_000_000_000n; // 50 gwei
