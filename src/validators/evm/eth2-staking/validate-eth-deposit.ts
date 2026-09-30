@@ -8,7 +8,6 @@ import {
   Transaction,
 } from 'ethers';
 import {
-  BLS_WITHDRAWAL_PREFIX,
   DOMAIN_DEPOSIT_TYPE,
   ETH1_ADDRESS_WITHDRAWAL_PREFIX,
   GWEI,
@@ -30,8 +29,13 @@ import {
   hashDepositDataTreeRoot,
 } from './ssz-roots';
 import { ERRORS } from '../../../constants/messages/errors';
-import type { BaseValidatorValidationResult } from '../../../types';
+import type {
+  ActionArguments,
+  BaseValidatorValidationResult,
+} from '../../../types';
 import { isAllZero } from '../../../utils/validation';
+import { validateGasFields } from './gas';
+import { validateTxEnvelope } from './envelope';
 
 const depositInterface = new Interface([DEPOSIT_FUNC_SIGNATURE]);
 const depositSelector = getBytes(
@@ -42,9 +46,14 @@ const depositSelector = getBytes(
  * Full static validation for a beacon `deposit` call (shape -> ABI -> semantics ->
  * SSZ `DepositData` root -> BLS proof-of-possession).
  *
- * Supports `0x00`, `0x01`, and `0x02` (Pectra) withdrawal credentials. `0x01` and
- * `0x02` must embed the staker EVM address; `0x02` also requires a whole-ETH
- * value (1-31 ETH for top-up, or >=32 ETH for a new compounding deposit).
+ * `0x01` and `0x02` credentials must embed the staker EVM address; `0x02` also
+ * requires a whole-ETH value (1-31 ETH for top-up, or >=32 ETH for a new
+ * compounding deposit). `0x00` (BLS) credentials are NOT supported: they hold a
+ * hash of a BLS key, cannot be tied to `userAddress`, and whoever holds that key
+ * can later redirect withdrawals (BLSToExecutionChange).
+ *
+ * Integrator args (all optional): `maxGasLimit`, `maxFeePerGasWei`,
+ * `maxPriorityFeePerGasWei` raise the default gas caps.
  *
  * @param userAddress Staker address; `0x01` / `0x02` credentials must point at this address.
  * @param requestChainId Caller’s chain id - should match the tx and this network.
@@ -54,6 +63,7 @@ export function validateEthBeaconDeposit(
   userAddress: string,
   requestChainId: number | undefined,
   network: EthNetwork,
+  args?: ActionArguments,
 ): BaseValidatorValidationResult {
   if (!userAddress) {
     return { ok: false, reason: ERRORS.INVALID_USER_ADDR };
@@ -64,6 +74,7 @@ export function validateEthBeaconDeposit(
   }
 
   const userAddr = getAddress(userAddress);
+
   // --- 1) Transaction shape
   let tx: Transaction;
   try {
@@ -110,6 +121,10 @@ export function validateEthBeaconDeposit(
       reason: ERRORS.INVALID_CHAIN_ID_NOT_MATCH_TRANSACTION,
     };
   }
+  const envelopeCheck = validateTxEnvelope(tx);
+  if (!envelopeCheck.ok) return envelopeCheck;
+  const gasCheck = validateGasFields(tx, args);
+  if (!gasCheck.ok) return gasCheck;
   const { value } = tx;
   const dataBytes = new Uint8Array(getBytes(tx.data));
   if (value === 0n) {
@@ -226,13 +241,6 @@ export function validateEthBeaconDeposit(
       if (valueErr) {
         return { ok: false, reason: valueErr };
       }
-    }
-  } else if (prefix === BLS_WITHDRAWAL_PREFIX) {
-    if (isAllZero(withdrawalCredentials)) {
-      return {
-        ok: false,
-        reason: ERRORS.ETH.INVALID_BLS_WITHDRAWAL_CREDENTIALS_ALL_ZERO,
-      };
     }
   } else {
     return {

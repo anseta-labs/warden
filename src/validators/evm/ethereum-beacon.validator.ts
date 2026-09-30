@@ -42,6 +42,7 @@ export class EthereumBeaconValidator extends BaseValidator {
             userAddress,
             chainId,
             this.network,
+            args,
           );
         if (!valResult.ok) {
           return {

@@ -3,16 +3,25 @@
  * Regenerate after changing `buildEth2DepositApiResponse`:
  *   pnpm run generate-eth2-fixtures
  */
+import { createHash, randomBytes } from 'crypto';
+import { SecretKey } from '@chainsafe/blst';
 import { getBytes, hexlify, Interface, Transaction } from 'ethers';
 import { TransactionType } from '../../types';
 import {
   DEPOSIT_FUNC_NAME,
   DEPOSIT_FUNC_SIGNATURE,
+  DOMAIN_DEPOSIT_TYPE,
   EIP7002_WITHDRAWAL_REQUEST_PREDEPLOY,
+  GENESIS_FORK_VERSION_MAINNET,
   GWEI,
+  ONE_ETH_WEI,
 } from './eth2-staking/constants';
 import { ETH_MAINNET } from './eth2-staking/networks';
-import { hashDepositDataTreeRoot } from './eth2-staking/ssz-roots';
+import {
+  computeDepositSigningRoot,
+  computeDomain,
+  hashDepositDataTreeRoot,
+} from './eth2-staking/ssz-roots';
 import depositFixtures from './__fixtures__/eth2-deposit-unsigned-hex.json';
 import { EthereumBeaconValidator } from './ethereum-beacon.validator';
 
@@ -106,6 +115,49 @@ function buildEip7002UnsignedTx(params: {
     maxFeePerGas: 50n * 10n ** 9n,
     maxPriorityFeePerGas: 1n * 10n ** 9n,
   }).unsignedSerialized;
+}
+
+/**
+ * A correctly signed deposit whose withdrawal credentials use the 0x00 (BLS)
+ * format: 0x00 || sha256(withdrawal_pubkey)[1:]. Signed with a fresh key so it
+ * passes every other check and only the credential-type check can reject it.
+ */
+function build0x00DepositTx(amountEth: bigint): string {
+  const validatorKey = SecretKey.fromKeygen(randomBytes(32));
+  const withdrawalKey = SecretKey.fromKeygen(randomBytes(32));
+  const pubkey = validatorKey.toPublicKey().toBytes();
+  const withdrawalCredentials = new Uint8Array(
+    createHash('sha256').update(withdrawalKey.toPublicKey().toBytes()).digest(),
+  );
+  withdrawalCredentials[0] = 0x00;
+  const amount = Number((amountEth * ONE_ETH_WEI) / GWEI);
+  const domain = computeDomain(
+    DOMAIN_DEPOSIT_TYPE,
+    GENESIS_FORK_VERSION_MAINNET,
+  );
+  const signature = validatorKey
+    .sign(
+      computeDepositSigningRoot(
+        { pubkey, withdrawalCredentials, amount },
+        domain,
+      ),
+    )
+    .toBytes();
+  const depositDataRoot = hashDepositDataTreeRoot({
+    pubkey,
+    withdrawalCredentials,
+    amount,
+    signature,
+  });
+  return cloneTx(depositFixtures.mainnet_32eth_0x01, {
+    value: amountEth * ONE_ETH_WEI,
+    data: encodeDepositCalldata({
+      pubkey,
+      withdrawalCredentials,
+      signature,
+      depositDataRoot,
+    }),
+  });
 }
 
 describe('EthereumBeaconValidator', () => {
@@ -259,6 +311,117 @@ describe('EthereumBeaconValidator', () => {
       expect(r.reason).toMatch(
         /Request chainId does not match this validator network/,
       );
+    });
+
+    it('rejects 0x00 (BLS) withdrawal credentials', () => {
+      const r = validateDeposit(build0x00DepositTx(32n), staker);
+      expect(r.isValid).toBe(false);
+      expect(r.reason).toMatch(/only 0x01 and 0x02/);
+    });
+
+    describe('gas caps', () => {
+      const fixture = depositFixtures.mainnet_32eth_0x01;
+
+      it('rejects a gas limit above the cap', () => {
+        const hex = cloneTx(fixture, { gasLimit: 30_000_000n });
+        expect(validateDeposit(hex, staker).reason).toMatch(/gas limit/);
+      });
+
+      it('rejects a max fee per gas above the cap', () => {
+        const hex = cloneTx(fixture, {
+          maxFeePerGas: 10n ** 15n,
+          maxPriorityFeePerGas: GWEI,
+        });
+        expect(validateDeposit(hex, staker).reason).toMatch(/max fee per gas/);
+      });
+
+      it('rejects a priority fee above the cap', () => {
+        const hex = cloneTx(fixture, {
+          maxFeePerGas: 400n * GWEI,
+          maxPriorityFeePerGas: 300n * GWEI,
+        });
+        expect(validateDeposit(hex, staker).reason).toMatch(/priority fee/);
+      });
+
+      it('accepts higher gas only when args raise the caps', () => {
+        const hex = cloneTx(fixture, {
+          maxFeePerGas: 800n * GWEI,
+          maxPriorityFeePerGas: 100n * GWEI,
+        });
+        expect(validateDeposit(hex, staker).isValid).toBe(false);
+        const r = validator.validate(
+          hex,
+          TransactionType.DEPOSIT,
+          staker,
+          {
+            maxFeePerGasWei: (800n * GWEI).toString(),
+            maxPriorityFeePerGasWei: (100n * GWEI).toString(),
+          },
+          mainnetContext(),
+        );
+        expect(r.isValid).toBe(true);
+      });
+    });
+
+    describe('transaction envelope', () => {
+      const base = Transaction.from(depositFixtures.mainnet_32eth_0x01);
+      const fields = {
+        to: base.to,
+        value: base.value,
+        data: base.data,
+        chainId: base.chainId,
+        nonce: 0,
+        gasLimit: 200_000n,
+      };
+
+      it('rejects a legacy (type 0) transaction', () => {
+        const hex = Transaction.from({
+          ...fields,
+          type: 0,
+          gasPrice: GWEI,
+        }).unsignedSerialized;
+        expect(validateDeposit(hex, staker).reason).toMatch(/type 2/);
+      });
+
+      it('rejects an access-list (type 1) transaction', () => {
+        const hex = Transaction.from({
+          ...fields,
+          type: 1,
+          gasPrice: GWEI,
+          accessList: [{ address: staker, storageKeys: [] }],
+        }).unsignedSerialized;
+        expect(validateDeposit(hex, staker).reason).toMatch(/type 2/);
+      });
+
+      it('rejects an EIP-7702 (type 4) transaction', () => {
+        const hex = Transaction.from({
+          ...fields,
+          type: 4,
+          maxFeePerGas: 50n * GWEI,
+          maxPriorityFeePerGas: GWEI,
+          authorizationList: [
+            {
+              address: '0x000000000000000000000000000000000000dEaD',
+              nonce: 0n,
+              chainId: 1n,
+              signature: {
+                r: '0x' + '11'.repeat(32),
+                s: '0x' + '22'.repeat(32),
+                yParity: 0,
+              },
+            },
+          ],
+        } as never).unsignedSerialized;
+        expect(validateDeposit(hex, staker).reason).toMatch(/type 2/);
+      });
+
+      it('rejects a type 2 transaction with a non-empty access list', () => {
+        const tx = base.clone();
+        tx.accessList = [{ address: staker, storageKeys: [] }];
+        expect(validateDeposit(tx.unsignedSerialized, staker).reason).toMatch(
+          /access list/,
+        );
+      });
     });
   });
 
