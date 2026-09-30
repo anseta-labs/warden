@@ -8,6 +8,7 @@ import {
   SystemProgram,
   StakeProgram,
   PublicKey,
+  Lockup,
 } from '@solana/web3.js';
 import { STAKE_DISC, SYSVAR_CLOCK } from './constants';
 
@@ -50,6 +51,7 @@ function buildStakeTx(opts: {
   lamports: number;
   stakerAuth?: PublicKey;
   withdrawerAuth?: PublicKey;
+  lockup?: Lockup;
 }): string {
   const {
     staker,
@@ -58,6 +60,7 @@ function buildStakeTx(opts: {
     lamports,
     stakerAuth = staker,
     withdrawerAuth = staker,
+    lockup,
   } = opts;
 
   const tx = new Transaction();
@@ -85,6 +88,7 @@ function buildStakeTx(opts: {
         staker: stakerAuth,
         withdrawer: withdrawerAuth,
       },
+      lockup,
     }),
   );
 
@@ -579,6 +583,48 @@ describe('SolanaNativeValidator', () => {
       });
       expect(r.isValid).toBe(false);
       expect(r.reason).toMatch(/Invalid validator vote account/);
+    });
+
+    describe('lockup', () => {
+      function stakeWithLockup(lockup: Lockup): string {
+        return buildStakeTx({
+          staker: STAKER_PK,
+          stakeAccount: STAKE_ACCOUNT,
+          voteAccount: VALIDATOR_PK,
+          lamports: Number(AMOUNT),
+          lockup,
+        });
+      }
+
+      it('accepts a stake with no lockup', () => {
+        expect(validateStakeTx(stakeWithLockup(Lockup.default)).isValid).toBe(
+          true,
+        );
+      });
+
+      it('rejects a lockup until a future date with a third-party custodian', () => {
+        const r = validateStakeTx(
+          stakeWithLockup(new Lockup(4102444800, 0, ATTACKER_PK)), // year 2100
+        );
+        expect(r.isValid).toBe(false);
+        expect(r.reason).toMatch(/lockup must be empty/);
+      });
+
+      it('rejects an epoch-based lockup', () => {
+        const r = validateStakeTx(
+          stakeWithLockup(new Lockup(0, 999_999, PublicKey.default)),
+        );
+        expect(r.isValid).toBe(false);
+        expect(r.reason).toMatch(/lockup must be empty/);
+      });
+
+      it('rejects a third-party custodian even without lockup dates', () => {
+        const r = validateStakeTx(
+          stakeWithLockup(new Lockup(0, 0, ATTACKER_PK)),
+        );
+        expect(r.isValid).toBe(false);
+        expect(r.reason).toMatch(/custodian/);
+      });
     });
   });
 
