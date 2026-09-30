@@ -72,7 +72,3 @@ validatorRegistry.set(
   makeValidatorRegistryKey(SOLANA_MAINNET.chainId, TransactionType.UNSTAKE),
   solanaMainnetValidator,
 );
-validatorRegistry.set(
-  makeValidatorRegistryKey(SOLANA_MAINNET.chainId, TransactionType.WITHDRAW),
-  solanaMainnetValidator,
-);

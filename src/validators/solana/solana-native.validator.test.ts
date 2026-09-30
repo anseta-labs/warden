@@ -505,7 +505,7 @@ describe('SolanaNativeValidator', () => {
       );
       expect(r.isValid).toBe(false);
       expect(r.reason).toMatch(
-        /Only STAKE, UNSTAKE, WITHDRAW.* supported .* Solana validator/,
+        /Only STAKE, UNSTAKE are supported .* Solana validator/,
       );
     });
 
