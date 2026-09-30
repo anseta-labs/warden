@@ -1,4 +1,5 @@
 import {
+  PublicKey,
   StakeInstruction,
   SystemInstruction,
   Transaction,
@@ -268,6 +269,32 @@ export function validateSolanaNativeStake(
       reason:
         `Initialize: withdrawer authority must be the user. ` +
         `got ${initDecoded.authorized.withdrawer.toBase58()}, expected ${staker}`,
+    };
+  }
+
+  // Lockup: a non-zero unixTimestamp/epoch freezes withdrawals until then, and a
+  // foreign custodian is the only key that can lift it early. Only the staker's
+  // signature is needed to submit Initialize, so this must be checked here;
+  // later instructions cannot undo it.
+  const { lockup } = initDecoded;
+  if (!lockup) {
+    return { ok: false, reason: 'Initialize: could not decode stake lockup' };
+  }
+  if (lockup.unixTimestamp !== 0 || lockup.epoch !== 0) {
+    return {
+      ok: false,
+      reason:
+        `Initialize: stake lockup must be empty. ` +
+        `got unixTimestamp=${lockup.unixTimestamp}, epoch=${lockup.epoch}`,
+    };
+  }
+  const custodian = lockup.custodian.toBase58();
+  if (custodian !== PublicKey.default.toBase58() && custodian !== staker) {
+    return {
+      ok: false,
+      reason:
+        `Initialize: lockup custodian must be unset or the staker. ` +
+        `got ${custodian}`,
     };
   }
 
