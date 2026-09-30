@@ -53,7 +53,15 @@ const request: ValidationRequest = {
   userAddress: '0x...',
   chainId: chains[0],
   transactionType: TransactionType.DEPOSIT,
-  // args: optional integrator hints; context: optional; Warden merges chainId into context for validators
+  // args: bindings to what the user approved (required ones fail closed when missing):
+  //   DEPOSIT:      none required (only 0x01/0x02 credentials to userAddress are accepted)
+  //   WITHDRAW:     validatorPublicKey, amountWei   (optional maxFeeWei)
+  //   FORCE_EXIT:   validatorPublicKey              (optional maxFeeWei)
+  //   Solana STAKE: validatorAddress, amount
+  // All EVM txs: must be EIP-1559 (type 2) with no access list. Gas fields are capped by
+  //   default (500k gas limit, 500 gwei max fee, 50 gwei tip); raise with maxGasLimit,
+  //   maxFeePerGasWei, maxPriorityFeePerGasWei.
+  // Take bindings from your own approval records, not from the API response being validated.
 };
 
 const result = warden.validate(request);
