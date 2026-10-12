@@ -8,6 +8,7 @@ import {
   SystemProgram,
   StakeProgram,
   PublicKey,
+  Lockup,
 } from '@solana/web3.js';
 import { STAKE_DISC, SYSVAR_CLOCK } from './constants';
 
@@ -50,6 +51,7 @@ function buildStakeTx(opts: {
   lamports: number;
   stakerAuth?: PublicKey;
   withdrawerAuth?: PublicKey;
+  lockup?: Lockup;
 }): string {
   const {
     staker,
@@ -58,6 +60,7 @@ function buildStakeTx(opts: {
     lamports,
     stakerAuth = staker,
     withdrawerAuth = staker,
+    lockup,
   } = opts;
 
   const tx = new Transaction();
@@ -85,6 +88,7 @@ function buildStakeTx(opts: {
         staker: stakerAuth,
         withdrawer: withdrawerAuth,
       },
+      lockup,
     }),
   );
 
@@ -123,6 +127,8 @@ function buildPartialUnstakeTx(opts: {
   splitAccount: PublicKey;
   lamports: number;
   stakerAuth?: PublicKey;
+  rentLamports?: number;
+  space?: number;
 }): string {
   const {
     staker,
@@ -130,6 +136,8 @@ function buildPartialUnstakeTx(opts: {
     splitAccount,
     lamports,
     stakerAuth = staker,
+    rentLamports = 2_282_880,
+    space = StakeProgram.space,
   } = opts;
   const tx = new Transaction();
   tx.recentBlockhash = '11111111111111111111111111111111';
@@ -141,8 +149,8 @@ function buildPartialUnstakeTx(opts: {
       newAccountPubkey: splitAccount,
       basePubkey: staker,
       seed: 'stakefiunstkmq08m33v',
-      lamports: 2_282_880,
-      space: StakeProgram.space,
+      lamports: rentLamports,
+      space,
       programId: StakeProgram.programId,
     }),
   );
@@ -497,7 +505,7 @@ describe('SolanaNativeValidator', () => {
       );
       expect(r.isValid).toBe(false);
       expect(r.reason).toMatch(
-        /Only STAKE, UNSTAKE, WITHDRAW.* supported .* Solana validator/,
+        /Only STAKE, UNSTAKE are supported .* Solana validator/,
       );
     });
 
@@ -579,6 +587,48 @@ describe('SolanaNativeValidator', () => {
       });
       expect(r.isValid).toBe(false);
       expect(r.reason).toMatch(/Invalid validator vote account/);
+    });
+
+    describe('lockup', () => {
+      function stakeWithLockup(lockup: Lockup): string {
+        return buildStakeTx({
+          staker: STAKER_PK,
+          stakeAccount: STAKE_ACCOUNT,
+          voteAccount: VALIDATOR_PK,
+          lamports: Number(AMOUNT),
+          lockup,
+        });
+      }
+
+      it('accepts a stake with no lockup', () => {
+        expect(validateStakeTx(stakeWithLockup(Lockup.default)).isValid).toBe(
+          true,
+        );
+      });
+
+      it('rejects a lockup until a future date with a third-party custodian', () => {
+        const r = validateStakeTx(
+          stakeWithLockup(new Lockup(4102444800, 0, ATTACKER_PK)), // year 2100
+        );
+        expect(r.isValid).toBe(false);
+        expect(r.reason).toMatch(/lockup must be empty/);
+      });
+
+      it('rejects an epoch-based lockup', () => {
+        const r = validateStakeTx(
+          stakeWithLockup(new Lockup(0, 999_999, PublicKey.default)),
+        );
+        expect(r.isValid).toBe(false);
+        expect(r.reason).toMatch(/lockup must be empty/);
+      });
+
+      it('rejects a third-party custodian even without lockup dates', () => {
+        const r = validateStakeTx(
+          stakeWithLockup(new Lockup(0, 0, ATTACKER_PK)),
+        );
+        expect(r.isValid).toBe(false);
+        expect(r.reason).toMatch(/custodian/);
+      });
     });
   });
 
@@ -957,6 +1007,40 @@ describe('SolanaNativeValidator', () => {
         const r = validateUnstakeTx(tx);
         expect(r.isValid).toBe(false);
         expect(r.reason).toMatch(/Unexpected instruction count/);
+      });
+
+      describe('rent funding', () => {
+        function partialUnstake(o: { rentLamports?: number; space?: number }) {
+          return buildPartialUnstakeTx({
+            staker: STAKER_PK,
+            stakeAccount: SOURCE_STAKE_PK,
+            splitAccount: SPLIT_ACCT_PK,
+            lamports: Number(PARTIAL_AMOUNT),
+            ...o,
+          });
+        }
+
+        it('accepts rent up to the 0.01 SOL cap', () => {
+          expect(validateUnstakeTx(partialUnstake({})).isValid).toBe(true);
+          expect(
+            validateUnstakeTx(partialUnstake({ rentLamports: 10_000_000 }))
+              .isValid,
+          ).toBe(true);
+        });
+
+        it('rejects rent above the cap', () => {
+          const r = validateUnstakeTx(
+            partialUnstake({ rentLamports: 100_000_000_000 }), // 100 SOL
+          );
+          expect(r.isValid).toBe(false);
+          expect(r.reason).toMatch(/rent funding too high/);
+        });
+
+        it('rejects a non-standard account size', () => {
+          const r = validateUnstakeTx(partialUnstake({ space: 10_000 }));
+          expect(r.isValid).toBe(false);
+          expect(r.reason).toMatch(/account size/);
+        });
       });
     });
   });

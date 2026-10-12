@@ -17,11 +17,7 @@ export class SolanaNativeValidator extends BaseValidator {
   }
 
   getSupportedTransactionTypes(): TransactionType[] {
-    return [
-      TransactionType.STAKE,
-      TransactionType.UNSTAKE,
-      TransactionType.WITHDRAW,
-    ];
+    return [TransactionType.STAKE, TransactionType.UNSTAKE];
   }
 
   validate(

@@ -13,6 +13,8 @@ import {
   SYSVAR_CLOCK,
   PARTIAL_UNSTAKE_INSTRUCTION_COUNT,
   FULL_UNSTAKE_INSTRUCTION_COUNT,
+  MAX_SPLIT_ACCOUNT_RENT_LAMPORTS,
+  STAKE_ACCOUNT_SPACE,
 } from './constants';
 import type { SolanaNetwork } from './networks';
 import type { BaseValidatorValidationResult } from '../../types';
@@ -285,6 +287,25 @@ export function validateSolanaPartialUnstake(
       reason:
         `CreateAccountWithSeed: new account owner must be Stake Program, ` +
         `got ${createDecoded.programId.toBase58()}`,
+    };
+  }
+
+  // The new account only needs rent-exempt funding. A larger amount would pull
+  // extra SOL out of the user's wallet into the split account.
+  if (createDecoded.lamports > MAX_SPLIT_ACCOUNT_RENT_LAMPORTS) {
+    return {
+      ok: false,
+      reason:
+        `CreateAccountWithSeed: rent funding too high. ` +
+        `got ${createDecoded.lamports} lamports, max ${MAX_SPLIT_ACCOUNT_RENT_LAMPORTS}`,
+    };
+  }
+  if (createDecoded.space !== STAKE_ACCOUNT_SPACE) {
+    return {
+      ok: false,
+      reason:
+        `CreateAccountWithSeed: account size must be ${STAKE_ACCOUNT_SPACE} bytes, ` +
+        `got ${createDecoded.space}`,
     };
   }
 

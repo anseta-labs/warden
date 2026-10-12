@@ -36,3 +36,13 @@ export {
   PARTIAL_UNSTAKE_INSTRUCTION_COUNT,
   FULL_UNSTAKE_INSTRUCTION_COUNT,
 };
+
+/**
+ * Ceiling on the lamports funding the new split stake account in a partial
+ * unstake (CreateAccountWithSeed). Real value today is the rent-exempt minimum
+ * for a 200-byte stake account (2,282,880 lamports); the buffer tolerates future
+ * rent changes. Excess would move the user's SOL into the new account.
+ */
+export const MAX_SPLIT_ACCOUNT_RENT_LAMPORTS = 10_000_000;
+/** Size of a stake account in bytes. */
+export const STAKE_ACCOUNT_SPACE = 200;

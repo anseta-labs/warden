@@ -1,9 +1,9 @@
 {
   "name": "@anseta/warden",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Zero-trust transaction validation for Anseta integrators (validate unsigned txs before signing).",
   "license": "MIT",
-  "author": "BCW Research",
+  "author": "Anseta Labs",
   "repository": {
     "type": "git",
     "url": "https://github.com/anseta-labs/warden.git"
